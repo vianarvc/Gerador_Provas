@@ -1,0 +1,447 @@
+# motor_gerador.py 20h54 04/10/25
+
+import random, math, json, traceback, re
+from collections import Counter, defaultdict
+from itertools import groupby
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
+try:
+    import cmath
+except ImportError:
+    cmath = None
+try:
+    import sympy as sp
+except ImportError:
+    sp = None
+
+def _get_math_context():
+    """Cria o dicionário de contexto com as bibliotecas disponíveis."""
+    context = {
+        'random': random,
+        'math': math,
+    }
+    if np: context['np'] = np
+    if cmath: context['cmath'] = cmath
+    if sp: context['sp'] = sp
+    return context
+
+# Substitua a função inteira por esta:
+
+def formatar_unidade(valor, unidade):
+    # Se o valor não for um número (ex: texto de alternativa manual), apenas retorna.
+    if not isinstance(valor, (int, float)):
+        return str(valor)
+
+    # Garante que a unidade seja uma string
+    unidade_str = f" {unidade}" if unidade else ""
+
+    if valor == 0:
+        return f"0{unidade_str}"
+
+    prefixos = [(1e12, 'T'), (1e9, 'G'), (1e6, 'M'), (1e3, 'k'), (1, ''),
+                (1e-3, 'm'), (1e-6, 'µ'), (1e-9, 'n'), (1e-12, 'p')]
+
+    for mult, prefixo in prefixos:
+        if abs(valor) >= mult:
+            v_ajustado = valor / mult
+            # Formata como inteiro se não tiver parte decimal
+            if v_ajustado == int(v_ajustado):
+                valor_str = str(int(v_ajustado))
+            else:
+                # Formata com 2 casas decimais e troca '.' por ','
+                valor_str = f'{v_ajustado:.2f}'.replace('.', ',')
+            
+            return f"{valor_str} {prefixo}{unidade if prefixo else unidade_str.strip()}"
+
+    # Fallback para números muito pequenos
+    valor_str = str(int(valor)) if valor == int(valor) else f'{valor:.2f}'.replace('.', ',')
+    return f"{valor_str}{unidade_str}"
+
+def _executar_logica_tabela(params_json, contexto):
+    params = json.loads(params_json)
+    for var in params.get("variaveis", []):
+        nome, tipo, vals = var.get("nome"), var.get("tipo"), var.get("valores")
+        if not all([nome, tipo, vals]): continue
+        if tipo == "Intervalo Inteiro": min_v, max_v = map(int, [v.strip() for v in vals.split('-')]); contexto[nome] = random.randint(min_v, max_v)
+        elif tipo == "Intervalo Decimal": min_v, max_v = map(float, [v.strip() for v in vals.split('-')]); contexto[nome] = random.uniform(min_v, max_v)
+        elif tipo == "Lista de Valores":
+            lista = [v.strip() for v in vals.split(',')];
+            try: lista = [float(v) if '.' in v else int(v) for v in lista]
+            except ValueError: pass
+            contexto[nome] = random.choice(lista)
+    formula = params.get("formula_resposta", "")
+    if formula: contexto['resposta_valor'] = eval(formula, {"__builtins__": None}, contexto)
+
+def _calcular_apenas_resposta(questao_base, seed):
+    random.seed(seed)
+    try:
+        contexto = _get_math_context()
+        if questao_base.get("parametros"):
+            params = questao_base.get("parametros", "")
+            if questao_base.get("tipo_questao", "Código (Python)") == "Código (Python)":
+                exec(params, contexto)
+            else:
+                _executar_logica_tabela(params, contexto)
+        return contexto.get('resposta_valor') or contexto.get('resposta')
+    except Exception:
+        return None
+
+def _gerar_variante_questao(questao_base, seed):
+    is_multi_valor = False
+    try:
+        random.seed(seed)
+        
+        formato_questao = questao_base.get("formato_questao", "Múltipla Escolha")
+        num_alternativas = questao_base.get("num_alternativas", 5)
+        unidade = questao_base.get("unidade_resposta", "")
+        permitir_negativos = questao_base.get("permitir_negativos", False)
+
+        contexto = _get_math_context()
+        contexto['avisos'] = []
+        
+        if questao_base.get("parametros"):
+            params = questao_base.get("parametros", "")
+            if questao_base.get("tipo_questao", "Código (Python)") == "Código (Python)":
+                try:
+                    exec(params, contexto)
+                except Exception as e:
+                    id_questao = questao_base.get('id', 'N/A')
+                    aviso = f"AVISO: Erro no código da questão ID {id_questao}: '{e}'. A questão não será gerada."
+                    print(aviso)
+                    return None
+            else:
+                _executar_logica_tabela(params, contexto)
+        
+        resposta_valor_calculado = contexto.get('resposta_valor') or contexto.get('resposta')
+        
+        for key in ['random', 'math', 'np', 'cmath', 'sp', '__builtins__']:
+            if key in contexto: del contexto[key]
+
+        enunciado_template = questao_base.get("enunciado", "")
+        contexto_formatado = contexto.copy()
+
+        import re
+        prefix_divisors = { 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'c': 1e-2, 'm': 1e-3, 'u': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12 }
+        placeholders = re.findall(r'\{(\w+)\}(?:\s*)((?:T|G|M|k|K|c|m|u|µ|n|p)\w*)', enunciado_template)
+        for var_name, unit_with_prefix in placeholders:
+            if var_name in contexto_formatado and isinstance(contexto_formatado[var_name], (int, float)):
+                prefix = unit_with_prefix[0]
+                if prefix in prefix_divisors:
+                    original_value = float(contexto_formatado[var_name])
+                    divisor = prefix_divisors[prefix]
+                    converted_value = original_value / divisor
+                    contexto_formatado[var_name] = int(converted_value) if converted_value == int(converted_value) else converted_value
+
+        enunciado_final = enunciado_template.format(**contexto_formatado)
+        enunciado_final = re.sub(r'(\d+)\.(\d+)', r'\1,\2', enunciado_final)
+        
+        alternativas_valores = []
+        resposta_valor = None
+
+        if formato_questao == "Múltipla Escolha":
+            if questao_base.get("gerar_alternativas_auto"):
+                # --- MODO 1: MÚLTIPLOS VALORES (VERSÃO FINAL E CORRIGIDA) ---
+                if isinstance(resposta_valor_calculado, dict) and "valores" in resposta_valor_calculado and "formato_texto" in resposta_valor_calculado:
+                    is_multi_valor = True
+                    valores_originais = resposta_valor_calculado["valores"]
+                    formato_texto = resposta_valor_calculado.get("formato_texto", "")
+                    
+                    if unidade and unidade.strip() and unidade.strip()[0] in prefix_divisors:
+                        prefixo = unidade.strip()[0]
+                        divisor = prefix_divisors[prefixo]
+                    else:
+                        prefixo = "Nenhum"
+
+                    # 2. Cria a versão escalada e arredondada dos valores
+                    valores_corretos_escalados = {}
+                    for chave, valor in valores_originais.items():
+                        if isinstance(valor, (int, float)):
+                            valor_escalado = valor / divisor
+                            valores_corretos_escalados[chave] = round(valor_escalado, 3)
+                        else:
+                            valores_corretos_escalados[chave] = valor
+                    
+                    if not permitir_negativos:
+                        for chave, valor in valores_corretos_escalados.items():
+                            if isinstance(valor, (int, float)) and valor < 0:
+                                valores_corretos_escalados[chave] = abs(valor)
+
+                    # Usa os valores escalados para a resposta correta
+                    resposta_valor = formato_texto.format(**valores_corretos_escalados).replace('.', ',')
+                    alternativas_valores = [resposta_valor]
+                    chaves = list(valores_corretos_escalados.keys())
+                    
+                    tentativas, limite_tentativas = 0, 500
+                    while len(alternativas_valores) < num_alternativas:
+                        if tentativas > limite_tentativas:
+                            print(f"AVISO: ID {questao_base.get('id', 'N/A')}: Limite de tentativas atingido (Múltiplos Valores).")
+                            break 
+                        
+                        # Usa a VERSÃO ESCALADA como base para os distratores
+                        distrator_valores = valores_corretos_escalados.copy()
+                        chaves_para_alterar = random.sample(chaves, random.randint(1, len(chaves)))
+                        
+                        for chave in chaves_para_alterar:
+                            valor_original_escalado = distrator_valores[chave]
+                            if isinstance(valor_original_escalado, (int, float)):
+                                desvio = random.uniform(0.1, 0.5) * random.choice([-1, 1])
+                                novo_valor = valor_original_escalado * (1 + desvio)
+                                novo_valor = round(novo_valor, 3)
+
+                                if novo_valor == valor_original_escalado:
+                                    novo_valor += random.choice([-0.01, 0.01]) if valor_original_escalado != 0 else 0.01
+                                
+                                if novo_valor == 0 and valor_original_escalado != 0:
+                                    novo_valor = round(valor_original_escalado * 0.5, 3)
+                                
+                                distrator_valores[chave] = novo_valor
+
+                        if not permitir_negativos:
+                            for chave, valor in distrator_valores.items():
+                                if isinstance(valor, (int, float)) and valor < 0:
+                                    distrator_valores[chave] = abs(valor)
+                        
+                        distrator_texto = formato_texto.format(**distrator_valores).replace('.', ',')
+                        if distrator_texto not in alternativas_valores:
+                            alternativas_valores.append(distrator_texto)
+                        
+                        tentativas += 1
+                    
+                    alternativas_unicas = []
+                    for alt in alternativas_valores:
+                        if alt not in alternativas_unicas:
+                            alternativas_unicas.append(alt)
+                    alternativas_valores = alternativas_unicas
+
+                elif isinstance(resposta_valor_calculado, (int, float)):
+                    # MODO 2: VALOR ÚNICO (LÓGICA ANTI-DUPLICATAS)
+                    resposta_valor_num = resposta_valor_calculado
+                    resposta_arredondada = round(resposta_valor_num, 2) if isinstance(resposta_valor_num, float) else resposta_valor_num
+                    resposta_valor = formatar_unidade(resposta_arredondada, unidade)
+                    
+                    alternativas_formatadas = [resposta_valor]
+                    pool_de_respostas = set()
+                    
+                    for i in range(num_alternativas * 20):
+                        pool_de_respostas.add(_calcular_apenas_resposta(questao_base, f"{seed}-pool-{i}"))
+                    
+                    pool_de_respostas.discard(resposta_valor_num)
+                    
+                    pool_list = list(pool_de_respostas)
+                    random.shuffle(pool_list)
+
+                    for valor_candidato in pool_list:
+                        if len(alternativas_formatadas) >= num_alternativas: break
+                        if valor_candidato is None or not isinstance(valor_candidato, (int, float)): continue
+                        if not permitir_negativos and valor_candidato < 0: continue
+                        
+                        valor_arredondado = round(valor_candidato, 2) if isinstance(valor_candidato, float) else valor_candidato
+                        texto_candidato = formatar_unidade(valor_arredondado, unidade)
+
+                        if texto_candidato not in alternativas_formatadas:
+                            alternativas_formatadas.append(texto_candidato)
+
+                    if len(alternativas_formatadas) < num_alternativas:
+                        print(f"AVISO: ID {questao_base['id']}: variações insuficientes. Usando fallback de %.")
+                        tentativas, limite_tentativas = 0, 500
+                        while len(alternativas_formatadas) < num_alternativas:
+                            if tentativas > limite_tentativas:
+                                print(f"AVISO: ID {questao_base['id']}: Limite de tentativas no fallback atingido.")
+                                break
+                            desvio = random.uniform(0.1, 0.5) * random.choice([-1, 1])
+                            distrator_num = resposta_valor_num * (1 + desvio) if resposta_valor_num != 0 else random.uniform(0.1, 1.0)
+                            if not permitir_negativos and distrator_num < 0: distrator_num = abs(distrator_num)
+                            
+                            distrator_arredondado = round(distrator_num, 2) if isinstance(distrator_num, float) else round(distrator_num)
+                            distrator_texto = formatar_unidade(distrator_arredondado, unidade)
+                            
+                            if distrator_texto not in alternativas_formatadas:
+                                alternativas_formatadas.append(distrator_texto)
+                            tentativas += 1
+                    
+                    alternativas_valores = alternativas_formatadas
+            else:
+                # MODO 3: Alternativas Manuais (código original)
+                resposta_valor = resposta_valor_calculado
+                letras_base = ["a", "b", "c", "d", "e"]
+                for letra in letras_base[:num_alternativas]:
+                    alt_base = questao_base.get(f"alternativa_{letra}")
+                    if alt_base: alternativas_valores.append(alt_base.format(**contexto))
+                resposta_letra = questao_base.get("resposta_correta", "?")
+                alt_correta_texto = questao_base.get(f"alternativa_{resposta_letra.lower()}")
+                if alt_correta_texto: resposta_valor = alt_correta_texto.format(**contexto)
+        
+        elif formato_questao == "Verdadeiro ou Falso":
+             # (código original)
+            resposta_valor = resposta_valor_calculado
+            if resposta_valor not in ["Verdadeiro", "Falso"] and resposta_valor is not None:
+                resposta_valor = resposta_valor.format(**contexto)
+
+    except KeyError as e:
+        # (código de tratamento de erro)
+        id_questao = questao_base.get('id', 'N/A')
+        variavel_faltante = str(e).strip("'")
+        aviso = f"AVISO: Erro de formatação na questão ID {id_questao}: A variável {{{variavel_faltante}}} está no enunciado mas não foi definida nos parâmetros."
+        print(aviso)
+        return None
+    except Exception as e:
+        # (código de tratamento de erro)
+        id_questao = questao_base.get('id', 'N/A')
+        aviso = f"AVISO: Erro inesperado ao gerar a questão ID {id_questao}: {e}"
+        print(aviso)
+        import traceback
+        traceback.print_exc()
+        return None
+
+    imagem_path = questao_base.get("imagem", "")
+    if imagem_path: imagem_path = imagem_path.replace('\\', '/')
+    largura_imagem = questao_base.get("imagem_largura_percentual") or 50
+    
+    return { 
+        "id_base": questao_base.get("id"), 
+        "tema": questao_base.get("tema"), 
+        "formato_questao": formato_questao, 
+        "num_alternativas": num_alternativas, 
+        "enunciado": enunciado_final, 
+        "imagem": imagem_path, 
+        "imagemLarguraPercentual": largura_imagem, 
+        "resposta_valor": resposta_valor, 
+        "alternativas_valores": alternativas_valores,
+        "is_multi_valor": is_multi_valor }
+
+def _gerar_gabarito_distribuido(num_questoes):
+    letras = ["A", "B", "C", "D", "E"]; gabarito = []; contagem = Counter()
+    for _ in range(num_questoes):
+        letras_ordenadas = sorted(letras, key=lambda l: contagem[l]); letra_escolhida = letras_ordenadas[0]
+        gabarito.append(letra_escolhida); contagem[letra_escolhida] += 1
+    random.shuffle(gabarito); return gabarito
+
+def _rotacionar_letra(letra, rotacao):
+    letras = ["A", "B", "C", "D", "E"]
+    if letra not in letras: return letra
+    idx_original = letras.index(letra); idx_novo = (idx_original + rotacao) % len(letras); return letras[idx_novo]
+
+def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
+    opcoes_gabarito = opcoes_geracao.get("gabarito", {})
+    opcoes_pontuacao = opcoes_geracao.get("pontuacao", {})
+    valor_por_questao = opcoes_pontuacao.get("valor_por_questao", 0.0)
+    mostrar_valor_individual = opcoes_pontuacao.get("mostrar_valor_individual", False)
+
+    # --- INÍCIO DA NOVA LÓGICA DE GERAÇÃO GARANTIDA ---
+
+    # 1. PRÉ-GERAÇÃO DAS VARIAÇÕES
+    # Para cada questão de cálculo, vamos descobrir todas as suas variações únicas primeiro.
+    banco_de_variantes = defaultdict(list)
+    variantes_unicas_por_questao = defaultdict(set)
+
+    for q_base in questoes_base:
+        q_id = q_base['id']
+        
+        # Se a questão não tem parâmetros (ex: teórica), ela só tem uma "variação".
+        if not q_base.get('parametros'):
+            variante = _gerar_variante_questao(q_base, f"static-{q_id}")
+            if variante:
+                banco_de_variantes[q_id] = [variante]
+            continue
+
+        # Para questões de cálculo, tentamos encontrar todas as variações únicas.
+        max_tentativas_pool = 75 # Um número alto de tentativas para garantir encontrar as variações
+        for i in range(max_tentativas_pool):
+            seed_pool = f"pool-{q_id}-{i}"
+            variante = _gerar_variante_questao(q_base, seed_pool)
+            if variante:
+                # Usamos o enunciado como uma "assinatura" para detectar variações únicas
+                assinatura = variante['enunciado']
+                if assinatura not in variantes_unicas_por_questao[q_id]:
+                    variantes_unicas_por_questao[q_id].add(assinatura)
+                    banco_de_variantes[q_id].append(variante)
+        
+        # Embaralha as variações encontradas para que a distribuição seja aleatória
+        random.shuffle(banco_de_variantes[q_id])
+
+    # 2. PREPARAÇÃO DOS 'SLOTS' (para Grupos de questões, sem alteração na lógica)
+    questoes_base.sort(key=lambda q: q.get("grupo") or f"__individual_{q['id']}__")
+    slots = []
+    for key, group in groupby(questoes_base, key=lambda q: q.get("grupo")):
+        questoes_do_grupo = list(group)
+        if key and key.strip():
+            slots.append(questoes_do_grupo)
+        else:
+            slots.extend([[q] for q in questoes_do_grupo])
+    
+    if opcoes_gabarito.get("embaralhar_questoes", True):
+        random.shuffle(slots)
+
+    # 3. MONTAGEM DAS VERSÕES DA PROVA
+    versoes_finais = []
+    num_questoes_me = sum(1 for slot in slots if slot[0]['formato_questao'] == 'Múltipla Escolha')
+    
+    if opcoes_gabarito.get("distribuir", True):
+        gabarito_me_v1 = _gerar_gabarito_distribuido(num_questoes_me)
+    else:
+        gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"]) for _ in range(num_questoes_me)]
+
+    for i in range(num_versoes):
+        versao_final = []
+        gabarito_me_atual = [_rotacionar_letra(letra, i * opcoes_gabarito.get("rotacao", 0)) for letra in gabarito_me_v1]
+        contador_me = 0
+
+        for slot in slots:
+            questao_base_para_versao = slot[i % len(slot)]
+            q_id = questao_base_para_versao['id']
+
+            # --- PONTO CENTRAL DA MUDANÇA ---
+            # Em vez de gerar uma nova variação, pegamos uma da nossa lista pré-gerada.
+            lista_de_variantes = banco_de_variantes.get(q_id, [])
+            if not lista_de_variantes:
+                continue # Salvaguarda caso nenhuma variação tenha sido encontrada
+
+            # Pega a próxima variação disponível da lista, de forma cíclica
+            variante = lista_de_variantes[i % len(lista_de_variantes)]
+            
+            # A partir daqui, a lógica é a mesma de antes, mas aplicada à 'variante' que já pegamos pronta.
+            questao_final = variante.copy()
+            if mostrar_valor_individual and valor_por_questao > 0:
+                questao_final["valor"] = f"{valor_por_questao:.2f}".replace('.', ',')
+            else:
+                questao_final["valor"] = ""
+
+            if variante['formato_questao'] == 'Múltipla Escolha':
+                num_alternativas = variante.get('num_alternativas', 5)
+                letras_disponiveis = ["A", "B", "C", "D", "E"][:num_alternativas]
+                letra_correta_sorteada = gabarito_me_atual[contador_me]
+                contador_me += 1
+                
+                idx_sorteado = ["A", "B", "C", "D", "E"].index(letra_correta_sorteada)
+                letra_correta_final = letras_disponiveis[idx_sorteado % num_alternativas]
+                
+                alternativas = list(variante["alternativas_valores"])
+                resposta_valor = variante["resposta_valor"]
+                
+                if resposta_valor not in alternativas and len(alternativas) < num_alternativas:
+                    alternativas.append(resposta_valor)
+                
+                random.shuffle(alternativas)
+                try:
+                    idx_correta_atual = alternativas.index(resposta_valor)
+                    idx_alvo = letras_disponiveis.index(letra_correta_final)
+                    alternativas[idx_correta_atual], alternativas[idx_alvo] = alternativas[idx_alvo], alternativas[idx_correta_atual]
+                except (ValueError, IndexError):
+                    print(f"Aviso: não foi possível posicionar a resposta para a questão ID {variante['id_base']}...")
+                
+                questao_final["gabarito"] = letra_correta_final
+                questao_final["alternativas"] = {letra: texto for letra, texto in zip(letras_disponiveis, alternativas)}
+
+            elif variante['formato_questao'] == 'Verdadeiro ou Falso':
+                questao_final["gabarito"] = "V" if variante["resposta_valor"] == "Verdadeiro" else "F"
+            else:
+                questao_final["gabarito"] = "D"
+            
+            versao_final.append(questao_final)
+        
+        versoes_finais.append(versao_final)
+        
+    return versoes_finais

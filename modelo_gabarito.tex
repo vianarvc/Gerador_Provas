@@ -1,0 +1,52 @@
+% modelo_gabarito.tex
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage[svgnames,table]{xcolor} % Garante compatibilidade de cor com tabelas
+\usepackage{fancyhdr}
+\usepackage{array}
+\usepackage{colortbl}
+
+\setmainfont{Times New Roman}
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm}
+\setlength{\headheight}{50pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\includegraphics[height=1.5cm]{logo-iff.png}}
+\fancyhead[C]{\textbf{\Large GABARITO OFICIAL}}
+\fancyfoot[C]{Página \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\begin{document}
+
+<<% for versao in versoes %>>
+    <<% if not loop.first %>>
+        \bigskip
+        \bigskip
+    <<% endif %>>
+
+    \section*{\centering << versao.versao >>}
+    
+    % Centraliza a tabela na página
+    \begin{center}
+    % Tabela trocada para 'tabular' para ser mais compacta e colunas reajustadas
+    \begin{tabular}{|l|c|c|c|}
+        \hline
+        \rowcolor{lightgray} % Comando de cor para a linha do cabeçalho
+        \textbf{Tema} & \textbf{ID} & \textbf{Questão} & \textbf{Resposta} \\
+        \hline
+
+        <<% for item in versao.itens %>>
+            << item.tema >> & << item.id >> & << loop.index >> & \textbf{<< item.resposta >>} \\
+            \hline
+        <<% endfor %>>
+    \end{tabular}
+    \end{center}
+
+<<% endfor %>>
+
+\end{document}

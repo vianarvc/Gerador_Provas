@@ -1,0 +1,162 @@
+% modelo_prova.tex (versão corrigida e limpa)
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage[space]{grffile}
+\usepackage{amsmath}
+\usepackage{geometry} 
+\usepackage[svgnames]{xcolor}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{ifthen}
+\usepackage{tasks}
+
+\setmainfont{Times New Roman}
+
+% --- Geometria da Página ---
+% Definimos a altura do cabeçalho primeiro para o geometry calcular o layout corretamente.
+\setlength{\headheight}{50pt} 
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm, includehead, includefoot}
+
+% --- Configuração do Cabeçalho e Rodapé ---
+\pagestyle{fancy}
+\fancyhf{} % Limpa todos os campos
+\fancyhead[L]{\includegraphics[height=1.5cm]{logo-iff.png}}
+
+% --- CABEÇALHO CORRIGIDO ---
+% Usamos um tabular para criar as duas linhas sem erro.
+\fancyhead[R]{%
+    \begin{tabular}{@{}r@{}} % O @{} remove o padding da tabela
+        \textbf{VERSÃO} \\ 
+        \textbf{<<versao>>}
+    \end{tabular}%
+}
+
+% --- Rodapé que você ajustou ---
+\fancyfoot[L]{\small Prof. <<nomeProfessor>>}
+\fancyfoot[C]{\small <<instituicao>>} 
+\fancyfoot[R]{\thepage}
+
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% --- Comando para o Título da Questão ---
+\newcommand{\questiontitle}[2]{%
+    \par\noindent
+    \fcolorbox{gray}{lightgray}{%
+        \parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{%
+            \hfill\textbf{QUESTÃO #1}\hfill
+            \ifthenelse{\equal{#2}{}}{}{%
+                \textbf{(valor: #2 pts)}%
+            }%
+        }%
+    }%
+    \par\vspace{0.4cm}%
+}
+
+
+% #################### INÍCIO DO DOCUMENTO ####################
+\begin{document}
+\thispagestyle{empty}
+
+% (Capa da prova)
+\begin{center}
+    \fcolorbox{black}{black}{%
+        \begin{minipage}[c][2.5cm][c]{0.7\textwidth}
+            \centering \color{white}
+            {\sffamily\bfseries\fontsize{22}{26}\selectfont CCTECC} \\[0.5cm]
+            {\small Coordenação do Curso Técnico em Eletrotécnica - Campus Centro}
+        \end{minipage}%
+    }
+\end{center}
+\vspace*{0.5cm}
+\begin{center}
+    \fcolorbox{black}{black}{%
+        \begin{minipage}[c][2cm][c]{0.8\textwidth}
+            \centering \color{white} \fontsize{24}{28}\selectfont \textbf{AVALIAÇÃO BIMESTRAL}
+        \end{minipage}%
+    }\fcolorbox{black}{DarkGray}{%
+        \begin{minipage}[c][2cm][c]{0.12\textwidth}
+            \centering \color{white} \fontsize{36}{40}\selectfont \textbf{<<bimestre>>}
+        \end{minipage}%
+    }
+\end{center}
+\vspace*{0.5cm}
+\noindent\fcolorbox{gray}{lightgray}{\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{\centering\textbf{\Large <<nomeDisciplina|upper>> - <<tipoExame|upper>>}}}
+\vspace*{0.5cm}
+\noindent\fcolorbox{gray}{lightgray}{\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{\centering\textbf{LEIA COM ATENÇÃO AS INSTRUÇÕES ABAIXO.}}}
+\vspace*{0.5cm}
+\begin{enumerate}[label=\bfseries\arabic*. , wide, labelwidth=!, labelindent=0pt, leftmargin=*]
+    \item Você está recendo o seguinte material:
+        \begin{enumerate}[label=\alph*)]
+            \item 1 caderno de questões, contendo: \\
+            \begin{center}
+                \begin{tabular}{|c|c|c|} \hline
+                    \textbf{Quantidade de questões} & \textbf{Valor de cada questão} & \textbf{Valor Total da Prova} \\ \hline
+                    <<numeroQuestoes>> & <<valorPorQuestao>> & <<valorTotalProva>> \\ \hline
+                \end{tabular}
+            \end{center}
+            \item 1 cartão de respostas, destinado às respostas das questões de múltipla escolha.
+        \end{enumerate}
+    \item Verifique se este material está completo. Caso contrário, notifique imediatamente ao professor.
+    \item Observe no Cartão-Resposta as instruções sobre a marcação das respostas.
+    \item Tenha muito cuidado com o Cartão-Resposta, para não dobrar, amassar ou manchar.
+    \item Esta prova é individual e sem consulta.
+\end{enumerate}
+\vspace{0.5cm}
+\noindent\textbf{Nome:} \rule{0.8\textwidth}{0.4pt} \\
+\vspace{0.5cm}
+\noindent\textbf{Data:} \rule{0.4\textwidth}{0.4pt}
+\newpage
+
+% ========= CORPO DA PROVA (QUESTÕES) ===========
+<<% for questao in questoes %>>
+% --- Início da "caixa" que impede a quebra da questão ---
+    \begin{minipage}{\linewidth} 
+    \questiontitle{<<loop.index>>}{<<questao.valor>>}
+    
+    <<questao.enunciado>>
+
+    <<% if questao.imagem %>>
+        \par\vspace{0.1cm}
+        \par\noindent\centering
+        \includegraphics[width=<<questao.imagemLarguraPercentual / 100.0>>\textwidth]{<<questao.imagem>>}
+        \par\vspace{0.1cm}
+    <<% endif %>>
+
+    <<% if questao.formato_questao == 'Múltipla Escolha' %>>
+        <<% if questao.is_multi_valor %>>
+            % --- LAYOUT HORIZONTAL (Apenas para Múltiplos Valores) ---
+            \begin{tasks}[label=\textbf{(\Alph*)}, label-offset=0.8em](5)
+            <<% for letra, texto in questao.alternativas.items()|sort %>>
+                \task << texto >>
+            <<% endfor %>>
+            \end{tasks}
+        <<% else %>>
+            % --- LAYOUT VERTICAL (Para Múltipla Escolha comum) ---
+            \begin{enumerate}[label=\textbf{(\Alph*)}, wide, labelwidth=!, labelindent=0pt, leftmargin=*, topsep=0.5cm, itemsep=0.3cm]
+            <<% for letra, texto in questao.alternativas.items()|sort %>>
+                \item << texto >>
+            <<% endfor %>>
+            \end{enumerate}
+        <<% endif %>>
+    <<% elif questao.formato_questao == 'Verdadeiro ou Falso' %>>
+        \vspace{0.5cm}
+        \noindent ( \quad ) Verdadeiro \hspace{2cm} ( \quad ) Falso
+    <<% elif questao.formato_questao == 'Discursiva' %>>
+        \vspace{5cm}
+    <<% endif %>>
+    
+    \vspace{1cm}
+    \end{minipage} 
+    % --- Fim da "caixa" ---
+
+<<% endfor %>>
+    
+\end{document}

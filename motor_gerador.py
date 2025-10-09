@@ -268,7 +268,7 @@ def _gerar_variante_questao(questao_base, seed):
 
         if formato_questao == "Múltipla Escolha":
             if questao_base.get("gerar_alternativas_auto"):
-                # --- MODO 1 ATUALIZADO COM "POOLS DE VALORES INDEPENDENTES" ---
+                # --- MODO 1 - RESPOSTAS MÚLTIPLAS ---
                 if isinstance(resposta_valor_calculado, dict) and "valores" in resposta_valor_calculado and "formato_texto" in resposta_valor_calculado:                   
                     is_multi_valor = True
                     
@@ -330,7 +330,7 @@ def _gerar_variante_questao(questao_base, seed):
                         tentativas += 1
 
                 elif isinstance(resposta_valor_calculado, (int, float)):
-                    # --- MODO 2 - VERSÃO FINAL (SEGUINDO A LÓGICA CORRETA) ---              
+                    # --- MODO 2 - RESPOSTA ÚNICA ---              
                     pool_numerico = _gerar_pool_combinatorio(questao_base, params, contexto)
                     
                     if pool_numerico is None:

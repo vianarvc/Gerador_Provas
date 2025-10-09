@@ -9,10 +9,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 
-from database import buscar_questoes_por_ids, carregar_configuracoes
+from database import (
+    obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, 
+    carregar_configuracoes, buscar_questoes_por_ids
+)
 from motor_gerador import gerar_versoes_prova
 from gerador_pdf import criar_pdf_provas
-from .custom_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox
+from .custom_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 from .log_dialog import LogDialog
 
 class GeradorPorIdWindow(QWidget):
@@ -34,6 +37,12 @@ class GeradorPorIdWindow(QWidget):
         self.nome_input = QLineEdit()
         self.nome_input.setPlaceholderText("Ex: Eletricidade Básica - Lista Pré-definida")
         config_layout.addWidget(self.nome_input)
+
+        disciplina_layout = QHBoxLayout()
+        disciplina_layout.addWidget(QLabel("<b>Selecione a Disciplina para a Prova:</b>"))
+        self.disciplina_combo = NoScrollComboBox()
+        disciplina_layout.addWidget(self.disciplina_combo, 1)
+        config_layout.addLayout(disciplina_layout)
         
         campos_capa_layout = QHBoxLayout()
         campos_capa_layout.addWidget(QLabel("Bimestre:"))
@@ -52,6 +61,20 @@ class GeradorPorIdWindow(QWidget):
         h_layout.addStretch()
         config_layout.addLayout(h_layout)
         main_layout.addWidget(config_group)
+
+        h_layout.addSpacing(20)
+        h_layout.addWidget(QLabel("Valor Total da Prova:"))
+        self.valor_total_spinbox = NoScrollDoubleSpinBox() 
+        self.valor_total_spinbox.setDecimals(2)
+        self.valor_total_spinbox.setMinimum(0.0)
+        self.valor_total_spinbox.setMaximum(1000.0)
+        self.valor_total_spinbox.setValue(10.0)
+        h_layout.addWidget(self.valor_total_spinbox)
+
+        h_layout.addSpacing(20)
+        self.check_distribuir_valor = QCheckBox("Distribuir valor igualmente") 
+        self.check_distribuir_valor.setChecked(True)
+        h_layout.addWidget(self.check_distribuir_valor)
 
         # --- Seleção de Questões por ID ---
         id_group = QGroupBox("Seleção de Questões")
@@ -104,6 +127,7 @@ class GeradorPorIdWindow(QWidget):
         main_layout.addWidget(self.btn_gerar, 0, Qt.AlignCenter)
         
         #self._center()
+        self._carregar_disciplinas()
 
     # Lógica de verificação para checar status 'ativa' ---
     def _verificar_ids(self):
@@ -143,7 +167,37 @@ class GeradorPorIdWindow(QWidget):
                 # Se a questão não foi encontrada OU foi encontrada mas está inativa,
                 # o tratamento é o mesmo: NÃO ENCONTRADO.
                 self.lista_questoes_carregadas.addItem(f"❌ ID {q_id}: NÃO ENCONTRADO OU INATIVO")
+    
+    def _carregar_disciplinas(self):
+        self.disciplina_combo.clear()
+        disciplinas = obter_disciplinas()
+        # Adiciona um placeholder para forçar a seleção inicial
+        if "-- Selecione --" not in disciplinas:
+            disciplinas.insert(0, "-- Selecione --")
+        self.disciplina_combo.addItems(disciplinas)
 
+    def _disciplina_selecionada(self):
+        """Atualiza os temas disponíveis em todas as linhas de critério."""
+        disciplina_nome = self.disciplina_combo.currentText()
+        if disciplina_nome == "-- Selecione --":
+            temas_filtrados = []
+        else:
+            disciplina_id = obter_disciplina_id_por_nome(disciplina_nome)
+            temas_filtrados = obter_temas(disciplina_id=disciplina_id)
+        
+        # Atualiza cada combobox de tema já existente
+        for linha in self.linhas_tema:
+            combo_tema = linha["combo"]
+            texto_atual = combo_tema.currentText()
+            combo_tema.clear()
+            combo_tema.addItems(temas_filtrados)
+            
+            # Tenta manter o tema que já estava selecionado
+            index = combo_tema.findText(texto_atual)
+            if index != -1:
+                combo_tema.setCurrentIndex(index)
+
+        self._atualizar_contadores()
 
     # --- MUDANÇA 3: `_gerar_prova` agora usa a lista de questões ativas ---
     def _gerar_prova(self):
@@ -154,13 +208,38 @@ class GeradorPorIdWindow(QWidget):
         log_dialog = LogDialog(self)
         log_dialog.show()
         self.btn_gerar.setEnabled(False)
+        num_total_questoes = len(self.questoes_ativas_verificadas)
+
+        if num_total_questoes == 0:
+            QMessageBox.warning(self, "Erro", "Nenhuma questão foi selecionada.")
+            return
         
         try:
             config = carregar_configuracoes()
             num_versoes = self.versoes_spinbox.value()
             log_dialog.append_log(f"Iniciando geração de {num_versoes} versão(ões) com {len(self.questoes_ativas_verificadas)} questões pré-definidas.")
+
+            log_dialog.append_log("Gerando variações das questões para cada versão...")
+
+            # --- LÓGICA DE VALOR ADICIONADA DE VOLTA ---
+            valor_total = self.valor_total_spinbox.value()
+            valor_por_questao = 0.0
+            valor_por_questao_display = "Vide a Questão"
+            if self.check_distribuir_valor.isChecked():
+                valor_por_questao = valor_total / num_total_questoes if num_total_questoes > 0 else 0
+                valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
             
-            opcoes_geracao = { "gabarito": {"embaralhar_questoes": self.check_embaralhar.isChecked()}, "pontuacao": {} }
+            opcoes_geracao = {
+                "gabarito": {
+                    "distribuir": self.check_distribuir.isChecked(),
+                    "rotacao": self.rotacao_spinbox.value(),
+                    "embaralhar_questoes": self.check_embaralhar.isChecked()
+                },
+                "pontuacao": {
+                    "valor_total": valor_total, 
+                    "valor_por_questao": valor_por_questao
+                }
+            }
             
             versoes_geradas = gerar_versoes_prova(self.questoes_ativas_verificadas, num_versoes, opcoes_geracao)
             if not versoes_geradas:
@@ -171,9 +250,17 @@ class GeradorPorIdWindow(QWidget):
             
             if not pasta_destino:
                 raise Exception("Nenhuma pasta de destino selecionada. Operação cancelada.")
+            
+            # >>> ADICIONE ESTA LINHA PARA PEGAR O TEXTO CORRETO <<<
+            disciplina_selecionada = self.disciplina_combo.currentText()
+
+                # Validação para garantir que uma disciplina foi selecionada
+            if disciplina_selecionada == "-- Selecione --":
+                QMessageBox.warning(self, "Erro", "Por favor, selecione uma disciplina para a prova.")
+                return
 
             dados_pdf = {
-                "nomeDisciplina": self.nome_input.text(), 
+                "nomeDisciplina": disciplina_selecionada, 
                 "tipoExame": "AVALIAÇÃO", 
                 "bimestre": self.bimestre_input.text(), # Pega o bimestre da tela
                 "nomeProfessor": config.get("nome_professor", ""), # Pega o professor das configs
@@ -182,11 +269,14 @@ class GeradorPorIdWindow(QWidget):
                 "nomeCursoCompleto": config.get("nome_curso", ""),
                 "nomeEscola": config.get("nome_escola", ""),
                 "emailContato": config.get("email_contato", ""),
+                "nomeescola": config.get("nome_escola", ""),
                 "numeroQuestoes": len(self.questoes_ativas_verificadas),
-                "valorTotalProva": " "
+                "valorPorQuestao": valor_por_questao_display,
+                "valorTotalProva": f"{valor_total:.2f}".replace('.', ',')
             }
             
-            criar_pdf_provas(self.nome_input.text(), versoes_geradas, pasta_destino, dados_pdf, log_dialog)
+            nome_arquivo_base = self.nome_input.text()
+            criar_pdf_provas(nome_arquivo_base, versoes_geradas, pasta_destino, dados_pdf, log_dialog)
             
             log_dialog.finish(success=True)
             QMessageBox.information(self, "Sucesso", f"Provas e gabarito gerados com sucesso em:\n{pasta_destino}")

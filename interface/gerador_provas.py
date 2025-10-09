@@ -329,9 +329,17 @@ class GeradorProvasWindow(QWidget):
             
             if not pasta_destino:
                 raise Exception("Nenhuma pasta de destino selecionada. Operação cancelada.")
+            
+            # >>> ADICIONE ESTA LINHA PARA PEGAR O TEXTO CORRETO <<<
+            disciplina_selecionada = self.disciplina_combo.currentText()
+
+                # Validação para garantir que uma disciplina foi selecionada
+            if disciplina_selecionada == "-- Selecione --":
+                QMessageBox.warning(self, "Erro", "Por favor, selecione uma disciplina para a prova.")
+                return
 
             dados_pdf = { 
-                "nomeDisciplina": self.nome_input.text(), 
+                "nomeDisciplina": disciplina_selecionada, 
                 "tipoExame": "AVALIAÇÃO",
                 "bimestre": self.bimestre_input.text(), # Pega o bimestre da tela
                 "nomeProfessor": config.get("nome_professor", ""), # Pega o professor das configs
@@ -340,12 +348,14 @@ class GeradorProvasWindow(QWidget):
                 "nomeCursoCompleto": config.get("nome_curso", ""),
                 "nomeEscola": config.get("nome_escola", ""),
                 "emailContato": config.get("email_contato", ""),
+                "nomeescola": config.get("nome_escola", ""),
                 "numeroQuestoes": num_total_questoes, 
                 "valorPorQuestao": valor_por_questao_display, 
                 "valorTotalProva": f"{valor_total:.2f}".replace('.', ',') 
             }
-            
-            criar_pdf_provas(self.nome_input.text(), versoes_geradas, pasta_destino, dados_pdf, log_dialog)
+
+            nome_arquivo_base = self.nome_input.text()
+            criar_pdf_provas(nome_arquivo_base, versoes_geradas, pasta_destino, dados_pdf, log_dialog)
             
             log_dialog.finish(success=True)
             QMessageBox.information(self, "Sucesso", f"Provas e gabarito gerados com sucesso em:\n{pasta_destino}")

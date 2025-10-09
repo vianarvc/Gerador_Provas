@@ -256,8 +256,8 @@ class CadastroQuestaoWindow(QWidget):
         self.snippet_combo = NoScrollComboBox()
         self.snippet_combo.addItems([
             "-- Selecione --", 
-            "Sortear Inteiro (randint)", 
-            "Sortear Decimal (uniform)", 
+            #"Sortear Inteiro (randint)", 
+            #"Sortear Decimal (uniform)", 
             "Sortear de Lista (choice)", 
             "Definir Resposta (Simples)",
             "Definir Resposta Múltipla (Auto)"
@@ -294,8 +294,8 @@ class CadastroQuestaoWindow(QWidget):
         btn_add_var = QPushButton("➕ Adicionar")
         btn_rem_var = QPushButton("➖ Remover")
         
-        btn_add_var.setObjectName("BotaoAcao")
-        btn_rem_var.setObjectName("BotaoAcao")
+        #btn_add_var.setObjectName("BotaoAcao")
+        #btn_rem_var.setObjectName("BotaoAcao")
         
         btn_add_var.clicked.connect(self._adicionar_linha_tabela)
         btn_rem_var.clicked.connect(self._remover_linha_tabela)
@@ -304,10 +304,60 @@ class CadastroQuestaoWindow(QWidget):
         botoes_tabela_layout.addStretch()
         layout_tabela.addLayout(botoes_tabela_layout)
 
-        layout_tabela.addWidget(QLabel("<b>Fórmula da Resposta (em Python):</b>"))
+       # Criamos o label e o guardamos em uma variável 'self'
+        self.label_formula_resposta = QLabel("<b>Fórmula da Resposta (em Python):</b>")
+        # Adicionamos um nome de objeto para podermos encontrá-lo depois
+        self.label_formula_resposta.setObjectName("label_formula_resposta") 
+        layout_tabela.addWidget(self.label_formula_resposta)
+
         self.formula_resposta_input = QLineEdit()
         self.formula_resposta_input.setPlaceholderText("Use os Nomes das Variáveis. Ex: V / R")
         layout_tabela.addWidget(self.formula_resposta_input)
+
+        # --- INÍCIO DA SEÇÃO MODO 1 ---
+        # Checkbox para ativar o modo de Múltiplas Respostas (MODO 1)
+        self.check_tabela_modo1 = QCheckBox("Gerar Resposta Múltipla (MODO 1)")
+        layout_tabela.addWidget(self.check_tabela_modo1)
+
+        # Grupo que contém todos os widgets específicos do MODO 1
+        self.group_modo1 = QGroupBox("Variáveis de Saída e Formatação (MODO 1)")
+        layout_modo1 = QVBoxLayout(self.group_modo1)
+        
+        # Tabela para as Variáveis de Saída (cálculos)
+        layout_modo1.addWidget(QLabel("<b>Tabela de Variáveis de Saída (Cálculos):</b>"))
+        self.tabela_saidas = QTableWidget()
+        self.tabela_saidas.setColumnCount(2)
+        self.tabela_saidas.setHorizontalHeaderLabels(["Nome da Saída", "Fórmula de Cálculo"])
+        self.tabela_saidas.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabela_saidas.setMinimumHeight(100)
+        layout_modo1.addWidget(self.tabela_saidas)
+
+        botoes_saida_layout = QHBoxLayout()
+        btn_add_saida = QPushButton("➕ Adicionar Saída")
+        btn_rem_saida = QPushButton("➖ Remover Saída")
+        btn_add_saida.clicked.connect(lambda: self.tabela_saidas.insertRow(self.tabela_saidas.rowCount()))
+        btn_rem_saida.clicked.connect(lambda: self.tabela_saidas.removeRow(self.tabela_saidas.currentRow()))
+        botoes_saida_layout.addWidget(btn_add_saida)
+        botoes_saida_layout.addWidget(btn_rem_saida)
+        botoes_saida_layout.addStretch()
+        layout_modo1.addLayout(botoes_saida_layout)
+
+        # Campo para o Formato da Alternativa
+        formato_layout = QHBoxLayout()
+        formato_layout.addWidget(QLabel("<b>Formato da Alternativa:</b>"))
+        self.formato_texto_input = QLineEdit()
+        self.formato_texto_input.setPlaceholderText("Ex: I1={I1}A; I2={I2}A")
+        formato_layout.addWidget(self.formato_texto_input)
+
+        self.btn_gerar_sugestao = QPushButton("Gerar Sugestão")
+        formato_layout.addWidget(self.btn_gerar_sugestao)
+        layout_modo1.addLayout(formato_layout)
+
+        # Adiciona o grupo inteiro ao layout da tabela e o esconde inicialmente
+        layout_tabela.addWidget(self.group_modo1)
+        self.group_modo1.setVisible(False)
+        # --- FIM DA SEÇÃO MODO 1 ---
+
         self.stacked_widget.addWidget(widget_tabela)
 
         # Unidade de Medida
@@ -424,9 +474,66 @@ class CadastroQuestaoWindow(QWidget):
         self.btn_salvar.clicked.connect(self.salvar_alterar_questao)
         layout.addWidget(self.btn_salvar)
 
-        self._center() 
+        self._center()
         self.configurar_modo()
         self.atualizar_ui_formato()
+
+        self.check_tabela_modo1.toggled.connect(self._atualizar_ui_tabela)
+        self.btn_gerar_sugestao.clicked.connect(self._gerar_sugestao_formato)
+        # Adicione um nome de objeto ao label da fórmula para podermos encontrá-lo
+        self.findChild(QLabel, "label_formula_resposta").setObjectName("label_formula_resposta")
+
+    def _atualizar_ui_tabela(self):
+        """Controla a visibilidade dos widgets do MODO 1 vs MODO 2 na aba Tabela."""
+        is_modo1 = self.check_tabela_modo1.isChecked()
+        self.group_modo1.setVisible(is_modo1)
+        self.formula_resposta_input.setVisible(not is_modo1)
+        # Opcional: Altera o label para clareza
+        self.findChild(QLabel, "label_formula_resposta").setVisible(not is_modo1)
+
+
+    def _gerar_sugestao_formato(self):
+        """Lê a tabela de saídas e gera um formato de texto padrão."""
+        nomes_saida = []
+        for row in range(self.tabela_saidas.rowCount()):
+            item = self.tabela_saidas.item(row, 0)
+            if item and item.text():
+                nome = item.text().strip()
+                nomes_saida.append(f"{nome}={{{nome}}}")
+        
+        sugestao = "; ".join(nomes_saida)
+        self.formato_texto_input.setText(sugestao)
+
+    @staticmethod
+    def converter_tabela_para_python_modo1(dados_tabela):
+        """Converte os dados da Tabela (MODO 1) para um script Python complexo."""
+        script_linhas = []
+
+        # 1. Gera as linhas de random.choice para as ENTRADAS
+        for var in dados_tabela.get("entradas", []):
+            linha = f"{var['nome']} = random.choice([{var['valores']}])"
+            script_linhas.append(linha)
+        
+        script_linhas.append("") # Linha em branco para separar
+
+        # 2. Gera as linhas de cálculo para as SAÍDAS
+        saidas_dict_keys = []
+        for var in dados_tabela.get("saidas", []):
+            linha = f"{var['nome']} = {var['formula']}"
+            script_linhas.append(linha)
+            saidas_dict_keys.append(f"'{var['nome']}': {var['nome']}")
+
+        script_linhas.append("")
+
+        # 3. Gera o dicionário final 'resposta_valor'
+        formato_texto = dados_tabela.get("formato_texto", "")
+        dict_keys_str = ", ".join(saidas_dict_keys)
+        
+        # Usar repr() no formato_texto é crucial para lidar com aspas e caracteres especiais
+        linha_final = f"resposta_valor = {{'valores': {{{dict_keys_str}}}, 'formato_texto': {repr(formato_texto)}}}"
+        script_linhas.append(linha_final)
+        
+        return "\n".join(script_linhas)
 
     @staticmethod
     def converter_tabela_para_python(dados_tabela):
@@ -583,7 +690,9 @@ class CadastroQuestaoWindow(QWidget):
         self.tabela_vars.insertRow(row)
         # Cria e insere o ComboBox customizado na tabela
         combo = NoScrollComboBox()
-        combo.addItems(["Intervalo Inteiro", "Intervalo Decimal", "Lista de Valores"])
+        combo.addItems([#"Intervalo Inteiro", 
+                        #"Intervalo Decimal", 
+                        "Lista de Valores"])
         self.tabela_vars.setCellWidget(row, 1, combo)
 
     def atualizar_ui_formato(self, *args, **kwargs):
@@ -648,14 +757,14 @@ class CadastroQuestaoWindow(QWidget):
             # Se o tema não estiver na nova lista, simplesmente mantém o texto antigo no campo.
             # Como o ComboBox é editável, isso preserva a informação.
             self.tema_input.setCurrentText(texto_tema_atual)
-    
+
+    # (Dentro da classe CadastroQuestaoWindow, substitua a função inteira por esta)
+
     def carregar_dados_questao(self):
         dados = obter_questao_por_id(self.questao_id)
-        self._atualizar_lista_temas()
-        self.tema_input.setCurrentText(dados.get("tema", ""))
-        self.fonte_input.setText(dados.get("fonte", ""))
         if not dados: return
         
+        # --- ETAPA 1: Carrega todos os campos de texto e seleções simples ---
         self.check_ativa.setChecked(bool(dados.get("ativa", 1)))
         self.grupo_input.setText(dados.get("grupo", ""))
         self.check_permitir_negativos.setChecked(bool(dados.get("permitir_negativos", 0)))
@@ -663,20 +772,27 @@ class CadastroQuestaoWindow(QWidget):
         formato = dados.get("formato_questao", "Múltipla Escolha")
         self.formato_combo.setCurrentText(formato)
         self.check_teorica.setChecked(bool(dados.get("is_teorica", 0)))
-        # Carrega o nome da disciplina usando o ID
+        
         disciplina_id = dados.get("disciplina_id")
         disciplina_nome = obter_disciplina_nome_por_id(disciplina_id)
         self.disciplina_input.setCurrentText(disciplina_nome)
-        self._atualizar_lista_temas()
-        self.tema_input.setCurrentText(dados.get("tema", ""))
+        
+        self._atualizar_lista_temas() # Atualiza a lista de temas com base na disciplina
+        self.tema_input.setCurrentText(dados.get("tema", "")) # Agora define o tema
+        
         self.dificuldade_combo.setCurrentText(dados.get("dificuldade", "Fácil"))
         self.fonte_input.setText(dados.get("fonte", ""))
+        
+        # --- LINHA CORRIGIDA ---
+        # Esta linha estava faltando na minha versão anterior
         self.enunciado_input.setPlainText(dados.get("enunciado", ""))
+        
         self.unidade_input.setCurrentText(dados.get("unidade_resposta", ""))
         self.imagem_path = dados.get("imagem", "")
         self.largura_slider.setValue(dados.get("imagem_largura_percentual") or 50)
         self._atualizar_preview_imagem()
         
+        # Carrega dados específicos do formato da questão (alternativas, V/F)
         if formato == "Múltipla Escolha":
             self.check_gerar_auto.setChecked(bool(dados.get("gerar_alternativas_auto", 0)))
             self.resposta_correta_combo.setCurrentText(dados.get("resposta_correta", "A"))
@@ -687,32 +803,53 @@ class CadastroQuestaoWindow(QWidget):
                 self.vf_verdadeiro_radio.setChecked(True)
             else:
                 self.vf_falso_radio.setChecked(True)
-                
-        tipo_questao = dados.get("tipo_questao", "Código (Python)")
-        if tipo_questao == "Tabela (Visual)":
-            self.tipo_combo.setCurrentIndex(1)
-            try:
-                parametros = json.loads(dados.get("parametros", "{}"))
-            except json.JSONDecodeError:
-                parametros = {}
-            
-            self.formula_resposta_input.setText(parametros.get("formula_resposta", ""))
-            self.tabela_vars.setRowCount(0)
-            
-            for var in parametros.get("variaveis", []):
-                self._adicionar_linha_tabela()
-                row = self.tabela_vars.rowCount() - 1
-                self.tabela_vars.setItem(row, 0, QTableWidgetItem(var.get("nome")))
-                self.tabela_vars.cellWidget(row, 1).setCurrentText(var.get("tipo"))
-                self.tabela_vars.setItem(row, 2, QTableWidgetItem(var.get("valores")))
-        else:
-            self.tipo_combo.setCurrentIndex(0)
-            self.parametros_input.setPlainText(dados.get("parametros", ""))
-            
-        self.atualizar_ui_formato()
-    
-    # (Substitua a sua função salvar_alterar_questao inteira por esta)
 
+        # --- ETAPA 2: Lógica de decisão para carregar os PARÂMETROS ---
+        parametros_tabela_json = dados.get("parametros_tabela_json")
+
+        if parametros_tabela_json:
+            # A QUESTÃO FOI CRIADA NA TABELA!
+            self.tipo_combo.setCurrentText("Tabela (Visual)")
+            try:
+                dados_tabela_salvos = json.loads(parametros_tabela_json)
+                is_modo1 = dados_tabela_salvos.get("modo1", False)
+                dados_originais = dados_tabela_salvos.get("dados", {})
+
+                # Preenche a Tabela de Entradas
+                self.tabela_vars.setRowCount(0)
+                entradas = dados_originais.get("variaveis", []) or dados_originais.get("entradas", [])
+                for var in entradas:
+                    self._adicionar_linha_tabela()
+                    row = self.tabela_vars.rowCount() - 1
+                    self.tabela_vars.setItem(row, 0, QTableWidgetItem(var.get("nome")))
+                    self.tabela_vars.cellWidget(row, 1).setCurrentText("Lista de Valores")
+                    self.tabela_vars.setItem(row, 2, QTableWidgetItem(var.get("valores")))
+
+                # Marca o checkbox MODO 1 e preenche os campos correspondentes
+                self.check_tabela_modo1.setChecked(is_modo1)
+                if is_modo1:
+                    self.formato_texto_input.setText(dados_originais.get("formato_texto", ""))
+                    self.tabela_saidas.setRowCount(0)
+                    for var in dados_originais.get("saidas", []):
+                        self.tabela_saidas.insertRow(self.tabela_saidas.rowCount())
+                        row = self.tabela_saidas.rowCount() - 1
+                        self.tabela_saidas.setItem(row, 0, QTableWidgetItem(var.get("nome")))
+                        self.tabela_saidas.setItem(row, 1, QTableWidgetItem(var.get("formula")))
+                else: # Modo 2
+                    self.formula_resposta_input.setText(dados_originais.get("formula_resposta", ""))
+
+            except (json.JSONDecodeError, AttributeError):
+                 self.tipo_combo.setCurrentText("Código (Python)")
+                 self.parametros_input.setPlainText(dados.get("parametros", "# Erro ao carregar dados da Tabela."))
+        else:
+            # É UMA QUESTÃO DE CÓDIGO "PURA" OU TEÓRICA
+            self.tipo_combo.setCurrentText("Código (Python)")
+            self.parametros_input.setPlainText(dados.get("parametros", ""))
+
+        # --- ETAPA 3: Atualiza a visibilidade de todos os widgets ---
+        self.atualizar_ui_formato()
+        self._atualizar_ui_tabela()
+    
     def salvar_alterar_questao(self):
         # --- ETAPA 1: Obter e validar a disciplina ---
         disciplina_nome = self.disciplina_input.currentText().strip()
@@ -725,9 +862,9 @@ class CadastroQuestaoWindow(QWidget):
         formato = self.formato_combo.currentText()
         is_teorica = self.check_teorica.isChecked() and formato == "Múltipla Escolha"
         
-        # Inicializa variáveis que serão preenchidas
         parametros_finais = ""
         tipo_questao_final = ""
+        parametros_tabela_json = None # <<< INICIALIZA A NOVA VARIÁVEL
 
         # --- ETAPA 3: LÓGICA DE CONVERSÃO E COLETA DOS PARÂMETROS ---
         if not is_teorica and formato != "Discursiva":
@@ -736,58 +873,67 @@ class CadastroQuestaoWindow(QWidget):
             if tipo_geracao_selecionado == "Código (Python)":
                 parametros_finais = self.parametros_input.toPlainText().strip()
                 tipo_questao_final = "Código (Python)"
-                
                 if not parametros_finais:
-                    QMessageBox.warning(self, "Erro", "O bloco de Código (Python) não pode ser vazio para questões calculadas.")
+                    QMessageBox.warning(self, "Erro", "O bloco de Código (Python) não pode ser vazio.")
                     return
 
             elif tipo_geracao_selecionado == "Tabela (Visual)":
-                # --- INÍCIO DA NOVA LÓGICA DE CONVERSÃO ---
                 try:
-                    variaveis_tabela = []
+                    # Coleta das variáveis de ENTRADA (Tabela 1)
+                    entradas = []
                     for row in range(self.tabela_vars.rowCount()):
-                        nome_item = self.tabela_vars.item(row, 0)
-                        tipo_var_widget = self.tabela_vars.cellWidget(row, 1)
-                        val_item = self.tabela_vars.item(row, 2)
-                        
-                        nome = nome_item.text().strip() if nome_item else ""
-                        tipo_var = tipo_var_widget.currentText() if tipo_var_widget else ""
-                        valores = val_item.text().strip() if val_item else ""
-                        
+                        # ... (lógica para ler a tabela de entradas)
+                        nome = self.tabela_vars.item(row, 0).text().strip()
+                        tipo_var = self.tabela_vars.cellWidget(row, 1).currentText()
+                        valores = self.tabela_vars.item(row, 2).text().strip()
                         if not (nome and valores):
-                            QMessageBox.warning(self, "Erro de Validação", f"A linha {row + 1} da tabela de variáveis está incompleta.")
-                            return
-
-                        # Validação crucial: só permite 'Lista de Valores' para o modo Tabela
+                            raise ValueError(f"A linha {row + 1} da Tabela de Entradas está incompleta.")
                         if tipo_var != "Lista de Valores":
-                            QMessageBox.warning(self, "Erro de Validação", 
-                                                "Para geração determinística, o modo 'Tabela (Visual)' "
-                                                "só suporta o tipo 'Lista de Valores'.")
-                            return
-
-                        variaveis_tabela.append({"nome": nome, "valores": valores})
-
-                    formula = self.formula_resposta_input.text().strip()
-                    if not formula:
-                         raise ValueError("A Fórmula da Resposta é obrigatória no modo Tabela.")
-
-                    # Monta o dicionário para o conversor
-                    dados_para_converter = {
-                        "variaveis": variaveis_tabela,
-                        "formula_resposta": formula
-                    }
+                            raise ValueError("Para geração determinística, a Tabela de Entradas só suporta 'Lista de Valores'.")
+                        entradas.append({"nome": nome, "valores": valores})
                     
-                    # Chama o tradutor!
-                    parametros_finais = self.converter_tabela_para_python(dados_para_converter)
-                    tipo_questao_final = "Código (Python)" # Engana o sistema!
+                    is_modo1 = self.check_tabela_modo1.isChecked()
+                    
+                    if not is_modo1: # Modo 2 (Valor Único)
+                        formula = self.formula_resposta_input.text().strip()
+                        if not formula:
+                            raise ValueError("A Fórmula da Resposta é obrigatória.")
+                        
+                        dados_para_converter = {"variaveis": entradas, "formula_resposta": formula}
+                        parametros_finais = self.converter_tabela_para_python(dados_para_converter)
 
-                except ValueError as e:
-                    QMessageBox.warning(self, "Erro na Tabela", str(e))
+                        # --- NOVO: Salva a "origem" da tabela ---
+                        parametros_tabela_json = json.dumps({"modo1": False, "dados": dados_para_converter})
+                    
+                    else: # Modo 1 (Múltiplas Respostas)
+                        # Coleta das variáveis de SAÍDA (Tabela 2)
+                        saidas = []
+                        for row in range(self.tabela_saidas.rowCount()):
+                            nome = self.tabela_saidas.item(row, 0).text().strip()
+                            formula = self.tabela_saidas.item(row, 1).text().strip()
+                            if not (nome and formula):
+                                raise ValueError(f"A linha {row + 1} da Tabela de Saídas está incompleta.")
+                            saidas.append({"nome": nome, "formula": formula})
+
+                        formato_texto = self.formato_texto_input.text().strip()
+                        if not saidas:
+                            raise ValueError("A Tabela de Saídas não pode estar vazia no MODO 1.")
+                        if not formato_texto:
+                            raise ValueError("O Formato da Alternativa é obrigatório no MODO 1.")
+
+                        dados_para_converter = {"entradas": entradas, "saidas": saidas, "formato_texto": formato_texto}
+                        parametros_finais = self.converter_tabela_para_python_modo1(dados_para_converter)
+
+                        # --- NOVO: Salva a "origem" da tabela ---
+                        parametros_tabela_json = json.dumps({"modo1": True, "dados": dados_para_converter})
+
+                    tipo_questao_final = "Código (Python)"
+
+                except (ValueError, AttributeError) as e:
+                    QMessageBox.warning(self, "Erro de Validação na Tabela", str(e))
                     return
-                # --- FIM DA NOVA LÓGICA DE CONVERSÃO ---
         
-        # Para questões teóricas, não há parâmetros nem tipo de questão
-        else:
+        else: # Questão Teórica
             parametros_finais = ""
             tipo_questao_final = ""
 
@@ -808,10 +954,10 @@ class CadastroQuestaoWindow(QWidget):
             "gerar_alternativas_auto": int(self.check_gerar_auto.isChecked()),
             "permitir_negativos": int(self.check_permitir_negativos.isChecked()),
             "parametros": parametros_finais,
-            "tipo_questao": tipo_questao_final
+            "tipo_questao": tipo_questao_final,
+            "parametros_tabela_json": parametros_tabela_json 
         }
 
-        # Coleta de Alternativas e Resposta (depende do formato)
         if formato == "Múltipla Escolha":
             dados_questao["resposta_correta"] = self.resposta_correta_combo.currentText()
             for letra, input_widget in self.alternativas_inputs.items():
@@ -895,8 +1041,8 @@ class CadastroQuestaoWindow(QWidget):
         }
         """)
         snippets = {
-            "Sortear Inteiro (randint)": "numero = random.randint(min, max)",
-            "Sortear Decimal (uniform)": "numero = random.uniform(min, max)",
+            #"Sortear Inteiro (randint)": "numero = random.randint(min, max)",
+            #"Sortear Decimal (uniform)": "numero = random.uniform(min, max)",
             "Sortear de Lista (choice)": "valor = random.choice([a, b, c, d, e]) #adicionar no mínimo 5 opções",
             "Definir Resposta (Simples)": "\nresposta_valor = ",
             "Definir Resposta Múltipla (Auto)": resposta_multipla_auto_snippet

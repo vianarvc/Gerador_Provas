@@ -1,0 +1,117 @@
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage[space]{grffile}
+\usepackage{amsmath}
+\usepackage[svgnames]{xcolor}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{tasks}
+\usepackage{longtable}
+\usepackage{ragged2e}
+
+\setmainfont{Times New Roman}
+\geometry{a4paper, top=1.5cm, bottom=1.5cm, left=2cm, right=2cm}
+
+\pagestyle{empty}
+
+\begin{document}
+\begin{center}
+    {\Huge \textbf{Cardápio de Questões}}
+\end{center}
+%\vspace{1cm}
+
+<<% for questao in questoes %>>
+
+% --- Cabeçalho do Tema e Disciplina ---
+<<% if loop.first or questao.tema != loop.previtem.tema or questao.disciplina_id != loop.previtem.disciplina_id %>>
+    <<% if not loop.first %>>\vspace{1.5cm}<<% endif %>>
+    \begin{center}
+        \fcolorbox{gray}{lightgray}{%
+            \parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{%
+                \centering
+                \textbf{\large << obter_disciplina_nome_por_id(questao.disciplina_id) >>} \\
+                \vspace{2mm}
+                \textbf{\Large << questao.tema >>}
+            }%
+        }%
+    \end{center}
+    %\vspace{0.5cm}
+<<% endif %>>
+
+% --- INÍCIO DA MUDANÇA: MINIPAGE E FBOX ---
+% Cada questão agora é um bloco dentro de uma caixa
+\par\noindent
+\fbox{\begin{minipage}{0.96\textwidth}
+\vspace{0.2cm}
+% --- FIM DA MUDANÇA ---
+
+% --- Corpo da Questão ---
+\par\noindent\textbf{ID da Questão: << questao.id_base >>} 
+<<% if questao.ativa %>>
+    \textbf{(Ativa)}
+<<% else %>>
+    \textcolor{red}{\textbf{(Inativa)}}
+<<% endif %>>
+
+% --- INÍCIO DA MUDANÇA: TEXTO JUSTIFICADO ---
+% Enunciado agora dentro de um ambiente 'justify'
+\begin{justify}
+<< questao.enunciado >>
+\end{justify}
+% --- FIM DA MUDANÇA ---
+
+% Imagem
+<<% if questao.imagem %>>
+    \par\vspace{0.1cm}
+    \par\noindent\centering
+    \includegraphics[width=<<questao.imagemLarguraPercentual / 100.0>>\textwidth]{<<questao.imagem>>}
+    \par\vspace{0.1cm}
+<<% endif %>>
+
+% --- LÓGICA CONDICIONAL PARA O FORMATO DA QUESTÃO ---
+<<% if questao.formato_questao == 'Múltipla Escolha' and questao.alternativas %>>
+    <<% if questao.is_multi_valor %>>
+        % Layout Horizontal (com ajuste para warnings)
+            \begin{tasks}[label=\textbf{(\Alph*)}, label-width=1em, label-offset=0.8em](5)
+            <<% for letra, texto in questao.alternativas.items()|sort %>>
+                \task 
+                    <<% if texto == questao.resposta_valor %>>
+                        \textbf{<< texto >>}
+                    <<% else %>>
+                        << texto >>
+                    <<% endif %>>
+            <<% endfor %>>
+            \end{tasks}
+    <<% else %>>
+       % Layout Vertical
+        \begin{enumerate}[label=\textbf{(\Alph*)}, wide, labelwidth=!, labelindent=0pt, leftmargin=*, topsep=0.5cm, itemsep=0.3cm]
+        <<% for letra, texto in questao.alternativas.items()|sort %>>
+            \item 
+                <<% if texto == questao.resposta_valor %>>
+                    \textbf{<< texto >>}
+                <<% else %>>
+                    << texto >>
+                <<% endif %>>
+        <<% endfor %>>
+        \end{enumerate}
+    <<% endif %>>
+<<% elif questao.formato_questao == 'Verdadeiro ou Falso' %>>
+    \vspace{0.5cm}
+    \noindent ( \quad ) Verdadeiro \hspace{2cm} ( \quad ) Falso
+<<% elif questao.formato_questao == 'Discursiva' %>>
+    \vspace{5cm}
+<<% endif %>>
+
+%\par\vspace{0.5cm}
+
+% --- INÍCIO DA MUDANÇA: FIM DO MINIPAGE ---
+\end{minipage}}
+\vspace{2mm} % Espaço entre as caixas das questões
+% --- FIM DA MUDANÇA ---
+
+<<% endfor %>>
+
+\end{document}

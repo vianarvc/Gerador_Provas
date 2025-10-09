@@ -3,6 +3,9 @@
 import random, math, json, traceback, re
 from collections import Counter, defaultdict
 from itertools import groupby
+from database import obter_todas_questoes_para_cardapio, obter_disciplina_nome_por_id
+import gerador_pdf
+from PyQt5.QtWidgets import QApplication
 
 try:
     import numpy as np
@@ -617,3 +620,59 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
         versoes_finais.append(versao_final)
         
     return versoes_finais
+
+def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, log_dialog=None):
+    """
+    Orquestra a criação do PDF do cardápio, usando um LogDialog.
+    """
+    def log_message(message):
+        """ Helper local para log. """
+        if log_dialog:
+            log_dialog.append_log(message)
+            QApplication.processEvents() # <<< A CHAVE PARA NÃO TRAVAR
+        else:
+            print(message)
+            
+    try:
+        log_message("Iniciando a geração do cardápio de questões com filtros...")
+        
+        questoes_base = obter_todas_questoes_para_cardapio(disciplina_id, tema)
+        if not questoes_base:
+            raise ValueError("Nenhuma questão encontrada para os filtros selecionados.")
+
+        log_message(f"Encontradas {len(questoes_base)} questões para o cardápio.")
+        
+        questoes_geradas = []
+        for questao_base in questoes_base:
+            variante = _gerar_variante_questao(questao_base, seed=questao_base['id'])
+            if variante:
+                if variante.get("formato_questao") == "Múltipla Escolha":
+                    letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                    alternativas_dict = {}
+                    # Apenas ordena a lista de valores, sem embaralhar
+                    valores_ordenados = sorted(variante.get("alternativas_valores", []))
+                    for i, valor in enumerate(valores_ordenados):
+                        alternativas_dict[letras[i]] = valor
+                    variante['alternativas'] = alternativas_dict
+
+                variante['id_base'] = questao_base['id']
+                variante['ativa'] = questao_base['ativa']
+                variante['disciplina_id'] = questao_base['disciplina_id']
+                questoes_geradas.append(variante)
+
+        log_message(f"Geradas {len(questoes_geradas)} variantes para o PDF.")
+
+        contexto_extra = { "obter_disciplina_nome_por_id": obter_disciplina_nome_por_id }
+        template_path = 'modelo_cardapio.tex'
+        
+        # Passa o log_dialog para a função de gerar o PDF
+        gerador_pdf.gerar_pdf_cardapio(
+            questoes_geradas, caminho_salvar_pdf, template_path, contexto_extra, log_dialog
+        )
+        
+        log_message("Cardápio de questões gerado com sucesso!")
+        return True, "Cardápio gerado com sucesso!"
+
+    except Exception as e:
+        log_message(f"ERRO ao gerar cardápio: {e}")
+        return False, f"Ocorreu um erro: {e}"

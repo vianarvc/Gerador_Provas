@@ -67,6 +67,7 @@ def init_db():
     check_and_add_column('disciplina_id', 'INTEGER REFERENCES disciplinas(id)')
     check_and_add_column('fonte', 'TEXT')
     check_and_add_column('tipo_resposta', 'TEXT') 
+    check_and_add_column('parametros_tabela_json', 'TEXT') # <<< ADICIONE ESTA LINHA
 
     conn.commit()
     conn.close()
@@ -503,3 +504,60 @@ def carregar_configuracoes():
             return settings.get('identificacao', {})
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
+    
+def obter_todas_questoes_para_cardapio(disciplina_id=None, tema=None):
+    """
+    Busca TODAS as questões (ativas e inativas), com filtros opcionais
+    de disciplina e tema, e ordena usando a ordem customizada de temas.
+    """
+    
+    # 1. Obter a ordem customizada dos temas
+    # Reutilizamos a lógica de obter_temas, mas queremos a lista ordenada, sem o 'Todos'
+    temas_ordenados = obter_temas(disciplina_id=disciplina_id)
+    if temas_ordenados and temas_ordenados[0] == "Todos":
+        temas_ordenados = temas_ordenados[1:]
+    
+    # Cria um dicionário para mapear tema para sua posição customizada (ex: {'Tema A': 0, 'Tema B': 1})
+    tema_para_posicao = {t: i for i, t in enumerate(temas_ordenados)}
+
+    conn = connect_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    conditions = []
+    params = []
+
+    if disciplina_id:
+        conditions.append("disciplina_id = ?")
+        params.append(disciplina_id)
+    
+    if tema and tema != "Todos":
+        conditions.append("tema = ?")
+        params.append(tema)
+
+    query = "SELECT * FROM questoes"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
+    # 2. ALtera a Query SQL: Ordena apenas por disciplina e ID (a ordenação por tema será em Python)
+    query += " ORDER BY disciplina_id, id" 
+    
+    cursor.execute(query, params)
+    questoes = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    # 3. Ordenação Final em Python usando a ordem customizada
+    # A ordenação será: 
+    # 1º Disciplina (o SQL já cuidou disso, mas é bom manter)
+    # 2º Posição do Tema (Customizada)
+    # 3º ID (para ordem estável)
+    
+    def key_sort(questao):
+        # A posição do tema é obtida do dicionário tema_para_posicao.
+        # Usamos float('inf') para temas que não estão na lista salva, colocando-os no final.
+        posicao_tema = tema_para_posicao.get(questao['tema'], float('inf'))
+        return (questao['disciplina_id'], posicao_tema, questao['id'])
+
+    questoes_ordenadas = sorted(questoes, key=key_sort)
+    
+    return questoes_ordenadas

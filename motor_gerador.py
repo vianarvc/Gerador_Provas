@@ -219,7 +219,8 @@ def _gerar_pool_combinatorio(questao_base, params_code, base_context):
 def _gerar_variante_questao(questao_base, seed):
     is_multi_valor = False
     try:
-        random.seed(seed)
+        if seed is not None:
+            random.seed(seed)
         
         formato_questao = questao_base.get("formato_questao", "Múltipla Escolha")
         num_alternativas = questao_base.get("num_alternativas", 5)
@@ -500,6 +501,7 @@ def _rotacionar_letra(letra, rotacao):
     idx_original = letras.index(letra); idx_novo = (idx_original + rotacao) % len(letras); return letras[idx_novo]
 
 def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
+    random.seed(None) 
     opcoes_gabarito = opcoes_geracao.get("gabarito", {})
     opcoes_pontuacao = opcoes_geracao.get("pontuacao", {})
     valor_por_questao = opcoes_pontuacao.get("valor_por_questao", 0.0)
@@ -525,8 +527,10 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
         # Para questões de cálculo, tentamos encontrar todas as variações únicas.
         max_tentativas_pool = 75 # Um número alto de tentativas para garantir encontrar as variações
         for i in range(max_tentativas_pool):
-            seed_pool = f"pool-{q_id}-{i}"
-            variante = _gerar_variante_questao(q_base, seed_pool)
+            #seed_pool = f"pool-{q_id}-{i}"
+            #variante = _gerar_variante_questao(q_base, seed_pool)
+            variante = _gerar_variante_questao(q_base, None)
+
             if variante:
                 # Usamos o enunciado como uma "assinatura" para detectar variações únicas
                 assinatura = variante['enunciado']
@@ -554,7 +558,10 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
     versoes_finais = []
     num_questoes_me = sum(1 for slot in slots if slot[0]['formato_questao'] == 'Múltipla Escolha')
     
-    if opcoes_gabarito.get("distribuir", True):
+    if num_questoes_me == 1:
+        # Se for apenas 1 questão, sorteia diretamente o gabarito.
+        gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"])]
+    elif opcoes_gabarito.get("distribuir", True):
         gabarito_me_v1 = _gerar_gabarito_distribuido(num_questoes_me)
     else:
         gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"]) for _ in range(num_questoes_me)]

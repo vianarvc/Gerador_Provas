@@ -250,7 +250,7 @@ def _gerar_variante_questao(questao_base, seed):
 
         import re
         prefix_divisors = { 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'c': 1e-2, 'm': 1e-3, 'u': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12 }
-        placeholders = re.findall(r'\{(\w+)\}(?:\s*)((?:T|G|M|k|K|c|m|u|µ|n|p)\w*)', enunciado_template)
+        placeholders = re.findall(r'\{(\w+)\}(?:\s*)((?:T|G|M|k|K|c|m|u|µ|n|p)\w{0,2})\b', enunciado_template)
         for var_name, unit_with_prefix in placeholders:
             if var_name in contexto_formatado and isinstance(contexto_formatado[var_name], (int, float)):
                 prefix = unit_with_prefix[0]
@@ -259,6 +259,19 @@ def _gerar_variante_questao(questao_base, seed):
                     divisor = prefix_divisors[prefix]
                     converted_value = original_value / divisor
                     contexto_formatado[var_name] = int(converted_value) if converted_value == int(converted_value) else converted_value
+
+        # --- INÍCIO DA CORREÇÃO DE ARREDONDAMENTO ---
+        # Adicione este bloco para arredondar todos os floats antes de formatar o enunciado.
+        for key, value in contexto_formatado.items():
+            if isinstance(value, float):
+                # Arredonda para 2 casas decimais para uma exibição limpa.
+                rounded_value = round(value, 2)
+                # Se o número arredondado for um inteiro (ex: 50.0), converte para inteiro.
+                if rounded_value == int(rounded_value):
+                    contexto_formatado[key] = int(rounded_value)
+                else:
+                    contexto_formatado[key] = rounded_value
+        # --- FIM DA CORREÇÃO DE ARREDONDAMENTO ---
 
         enunciado_final = enunciado_template.format(**contexto_formatado)
         enunciado_final = re.sub(r'(\d+)\.(\d+)', r'\1,\2', enunciado_final)

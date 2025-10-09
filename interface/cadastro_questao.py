@@ -13,6 +13,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from database import salvar_questao, obter_questao_por_id, atualizar_questao, obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, salvar_disciplina, obter_disciplina_nome_por_id
 import gerenciador_imagens
 from .custom_widgets import NoScrollComboBox
+import random
 
 UNIDADES_COMUNS = ["", "C", "S", "V", "A", "Ω", "W", "F", "H", "Hz", "s", "m", "g", "kg", "N", "J"]
 
@@ -427,6 +428,34 @@ class CadastroQuestaoWindow(QWidget):
         self.configurar_modo()
         self.atualizar_ui_formato()
 
+    @staticmethod
+    def converter_tabela_para_python(dados_tabela):
+        script_linhas = []
+        
+        # 1. Converte cada variável em uma linha de random.choice
+        for var in dados_tabela.get("variaveis", []):
+            nome_var = var.get("nome")
+            valores_str = var.get("valores")
+            
+            if not nome_var or not valores_str:
+                continue
+                
+            # Constrói a lista de valores para o random.choice
+            # Isso assume que os valores são números separados por vírgula.
+            # Adicione tratamento de erro se os valores puderem ser texto.
+            lista_de_valores = f"[{valores_str}]"
+            
+            linha_codigo = f"{nome_var} = random.choice({lista_de_valores})"
+            script_linhas.append(linha_codigo)
+            
+        # 2. Adiciona a linha da fórmula de resposta
+        formula = dados_tabela.get("formula_resposta")
+        if formula:
+            script_linhas.append(f"resposta_valor = {formula}")
+            
+        # 3. Junta tudo em um único script
+        return "\n".join(script_linhas)
+
     def _aplicar_estilos(self):
         """Define e aplica o Qt Style Sheet (QSS) para o formulário."""
         style = """
@@ -682,7 +711,7 @@ class CadastroQuestaoWindow(QWidget):
             
         self.atualizar_ui_formato()
     
-# Dentro da classe CadastroQuestaoWindow, substitua toda a função:
+    # (Substitua a sua função salvar_alterar_questao inteira por esta)
 
     def salvar_alterar_questao(self):
         # --- ETAPA 1: Obter e validar a disciplina ---
@@ -690,121 +719,119 @@ class CadastroQuestaoWindow(QWidget):
         if not disciplina_nome:
             QMessageBox.warning(self, "Erro", "O campo Disciplina é obrigatório.")
             return
-        # Esta função do database.py insere a disciplina se for nova e retorna o ID correto
         disciplina_id = salvar_disciplina(disciplina_nome)
 
         # --- ETAPA 2: Coletar todos os outros dados da tela ---
         formato = self.formato_combo.currentText()
         is_teorica = self.check_teorica.isChecked() and formato == "Múltipla Escolha"
-        params = ""
-        tipo = self.tipo_combo.currentText()
         
-        # Coleta de Parâmetros (Variáveis e Resposta Numérica)
+        # Inicializa variáveis que serão preenchidas
+        parametros_finais = ""
+        tipo_questao_final = ""
+
+        # --- ETAPA 3: LÓGICA DE CONVERSÃO E COLETA DOS PARÂMETROS ---
         if not is_teorica and formato != "Discursiva":
-            if tipo == "Código (Python)":
-                params = self.parametros_input.toPlainText().strip()
-                if not params:
-                    QMessageBox.warning(self, "Erro", "O bloco de Código (Python) das variáveis não pode ser vazio para questões calculadas.")
-                    return
-            else: # Tipo Tabela (Visual)
-                try:
-                    variaveis = []
-                    for row in range(self.tabela_vars.rowCount()):
-                        nome_item = self.tabela_vars.item(row, 0); val_item = self.tabela_vars.item(row, 2)
-                        nome = nome_item.text().strip() if nome_item else ""
-                        tipo_var = self.tabela_vars.cellWidget(row, 1).currentText()
-                        valores = val_item.text().strip() if val_item else ""
-                        if not (nome and valores):
-                             # Se uma linha estiver parcialmente preenchida, ignora/alerta. Aqui, apenas alerta.
-                             QMessageBox.warning(self, "Erro", f"Variável da linha {row + 1} incompleta.")
-                             return
-                        if nome and valores:
-                            variaveis.append({"nome": nome, "tipo": tipo_var, "valores": valores})
-                    formula = self.formula_resposta_input.text().strip()
-                    if self.check_gerar_auto.isChecked() and not formula:
-                        raise ValueError("Fórmula da Resposta é obrigatória.")
-                    
-                    if not variaveis and (self.check_gerar_auto.isChecked() or formato == "Múltipla Escolha"):
-                         QMessageBox.warning(self, "Erro", "A tabela de variáveis não pode ser vazia para gerar alternativas numéricas.")
-                         return
-                         
-                    params = json.dumps({"variaveis": variaveis, "formula_resposta": formula}, indent=4)
-                except Exception as e:
-                    QMessageBox.critical(self, "Erro", f"Erro ao processar a Tabela de Variáveis: {e}")
-                    return
-                
-        # Coleta de Resposta e Alternativas
-        resposta_correta = ""
-        gerar_auto = False
-        alternativas_dados = {}
-        unidade_resposta = ""
-
-        if formato == "Múltipla Escolha":
-            unidade_resposta = self.unidade_input.currentText().strip()
-            gerar_auto = self.check_gerar_auto.isChecked()
+            tipo_geracao_selecionado = self.tipo_combo.currentText()
             
-            if gerar_auto:
-                resposta_correta = "A" # Assume 'A' como a correta para o gabarito. O valor real é a fórmula.
-            else: # Alternativas manuais (Teórica ou Numérica não-auto)
-                resposta_correta = self.resposta_correta_combo.currentText()
-                alternativas_dados = {f"alternativa_{letra.lower()}": input_widget.text().strip() 
-                                      for letra, input_widget in self.alternativas_inputs.items()}
+            if tipo_geracao_selecionado == "Código (Python)":
+                parametros_finais = self.parametros_input.toPlainText().strip()
+                tipo_questao_final = "Código (Python)"
                 
-                # Validação de alternativas
-                if not is_teorica: # Só valida se não for teórica, pois teoricas podem ter alternativas vazias (completadas pelo cálculo)
-                    for letra, texto in alternativas_dados.items():
-                        if not texto and not gerar_auto:
-                             QMessageBox.warning(self, "Erro", f"A alternativa {letra.upper()} não pode ser vazia.")
-                             return
-                        
-        elif formato == "Verdadeiro ou Falso":
-            unidade_resposta = self.unidade_input.currentText().strip()
-            if self.vf_verdadeiro_radio.isChecked():
-                resposta_correta = "Verdadeiro"
-            elif self.vf_falso_radio.isChecked():
-                resposta_correta = "Falso"
+                if not parametros_finais:
+                    QMessageBox.warning(self, "Erro", "O bloco de Código (Python) não pode ser vazio para questões calculadas.")
+                    return
 
-        # Dicionário de dados
+            elif tipo_geracao_selecionado == "Tabela (Visual)":
+                # --- INÍCIO DA NOVA LÓGICA DE CONVERSÃO ---
+                try:
+                    variaveis_tabela = []
+                    for row in range(self.tabela_vars.rowCount()):
+                        nome_item = self.tabela_vars.item(row, 0)
+                        tipo_var_widget = self.tabela_vars.cellWidget(row, 1)
+                        val_item = self.tabela_vars.item(row, 2)
+                        
+                        nome = nome_item.text().strip() if nome_item else ""
+                        tipo_var = tipo_var_widget.currentText() if tipo_var_widget else ""
+                        valores = val_item.text().strip() if val_item else ""
+                        
+                        if not (nome and valores):
+                            QMessageBox.warning(self, "Erro de Validação", f"A linha {row + 1} da tabela de variáveis está incompleta.")
+                            return
+
+                        # Validação crucial: só permite 'Lista de Valores' para o modo Tabela
+                        if tipo_var != "Lista de Valores":
+                            QMessageBox.warning(self, "Erro de Validação", 
+                                                "Para geração determinística, o modo 'Tabela (Visual)' "
+                                                "só suporta o tipo 'Lista de Valores'.")
+                            return
+
+                        variaveis_tabela.append({"nome": nome, "valores": valores})
+
+                    formula = self.formula_resposta_input.text().strip()
+                    if not formula:
+                         raise ValueError("A Fórmula da Resposta é obrigatória no modo Tabela.")
+
+                    # Monta o dicionário para o conversor
+                    dados_para_converter = {
+                        "variaveis": variaveis_tabela,
+                        "formula_resposta": formula
+                    }
+                    
+                    # Chama o tradutor!
+                    parametros_finais = self.converter_tabela_para_python(dados_para_converter)
+                    tipo_questao_final = "Código (Python)" # Engana o sistema!
+
+                except ValueError as e:
+                    QMessageBox.warning(self, "Erro na Tabela", str(e))
+                    return
+                # --- FIM DA NOVA LÓGICA DE CONVERSÃO ---
+        
+        # Para questões teóricas, não há parâmetros nem tipo de questão
+        else:
+            parametros_finais = ""
+            tipo_questao_final = ""
+
+        # --- ETAPA 4: Montar o dicionário final com todos os dados ---
         dados_questao = {
             "disciplina_id": disciplina_id,
             "tema": self.tema_input.currentText().strip(),
-            "dificuldade": self.dificuldade_combo.currentText(),
-            "formato_questao": formato,
-            "enunciado": self.enunciado_input.toPlainText().strip(),
             "fonte": self.fonte_input.text().strip(),
+            "ativa": int(self.check_ativa.isChecked()),
+            "grupo": self.grupo_input.text().strip(),
+            "formato_questao": formato,
+            "dificuldade": self.dificuldade_combo.currentText(),
+            "enunciado": self.enunciado_input.toPlainText().strip(),
+            "unidade_resposta": self.unidade_input.currentText().strip(),
             "imagem": self.imagem_path,
             "imagem_largura_percentual": self.largura_slider.value(),
-            "ativa": 1 if self.check_ativa.isChecked() else 0,
-            "grupo": self.grupo_input.text().strip() if is_teorica else "",
-            "is_teorica": 1 if is_teorica else 0,
-            "tipo_questao": tipo, # Salva o tipo (Código/Tabela) mesmo se for teórica (onde params é vazio)
-            "parametros": params,
-            "unidade_resposta": unidade_resposta,
-            "gerar_alternativas_auto": 1 if gerar_auto else 0,
-            "permitir_negativos": 1 if self.check_permitir_negativos.isChecked() and gerar_auto else 0,
-            "resposta_correta": resposta_correta,
-            **alternativas_dados # Adiciona alternativas_a, _b, etc.
+            "is_teorica": int(is_teorica),
+            "gerar_alternativas_auto": int(self.check_gerar_auto.isChecked()),
+            "permitir_negativos": int(self.check_permitir_negativos.isChecked()),
+            "parametros": parametros_finais,
+            "tipo_questao": tipo_questao_final
         }
 
-        # --- ETAPA 3: Salvar ou Atualizar no Banco de Dados ---
-        if self.questao_id:
-            try:
+        # Coleta de Alternativas e Resposta (depende do formato)
+        if formato == "Múltipla Escolha":
+            dados_questao["resposta_correta"] = self.resposta_correta_combo.currentText()
+            for letra, input_widget in self.alternativas_inputs.items():
+                dados_questao[f"alternativa_{letra.lower()}"] = input_widget.text().strip()
+        elif formato == "Verdadeiro ou Falso":
+            dados_questao["resposta_correta"] = "Verdadeiro" if self.vf_verdadeiro_radio.isChecked() else "Falso"
+
+        # --- ETAPA 5: Salvar ou Atualizar no Banco de Dados ---
+        try:
+            if self.questao_id:
                 atualizar_questao(self.questao_id, dados_questao)
                 QMessageBox.information(self, "Sucesso", "Questão atualizada com sucesso!")
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Erro ao atualizar a questão: {e}")
-                return
-        else:
-            try:
+            else:
                 salvar_questao(dados_questao)
-                QMessageBox.information(self, "Sucesso", "Questão cadastrada com sucesso!")
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Erro ao salvar a questão: {e}")
-                return
-
-        # Notifica a tela principal e fecha a janela
-        self.questao_atualizada.emit()
-        self.close()
+                QMessageBox.information(self, "Sucesso", "Questão salva com sucesso!")
+            
+            self.questao_atualizada.emit()
+            self.close()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")
     
     def _criar_botao_formatacao(self, text, func, tooltip):
         btn = QToolButton()

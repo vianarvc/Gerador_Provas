@@ -130,6 +130,8 @@ class VisualizarQuestoesWindow(QWidget):
         label_temas.setObjectName("TituloSecundario")
         self.lista_temas = QListWidget()
         self.lista_temas.setDragDropMode(QListWidget.InternalMove) # Reordenar
+        self.lista_temas.model().rowsMoved.connect(self._salvar_ordem_atual_temas)
+        self.lista_temas.setSortingEnabled(False)
         layout_temas.addWidget(label_temas)
         layout_temas.addWidget(self.lista_temas)
         listas_layout.addWidget(painel_temas,1)
@@ -260,13 +262,15 @@ class VisualizarQuestoesWindow(QWidget):
             if child.widget(): child.widget().deleteLater()
 
         # Preenche com os novos detalhes
-        fonte_normal = QFont("Arial", 11)
+        fonte_normal = QFont("Arial", 12)
+
+        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>ID da Questão:</b> {questao['id']}", fonte_normal))
         
         status_texto = "ATIVA" if questao.get("ativa", 1) else "INATIVA"
         status_cor = "green" if questao.get("ativa", 1) else "red"
         self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Status:</b> <span style='color:{status_cor};'>{status_texto}</span>", fonte_normal))
         
-        # --- CORREÇÃO 1: Adiciona a Disciplina ---
+        # Adiciona a Disciplina 
         disciplina_nome = obter_disciplina_nome_por_id(questao.get("disciplina_id"))
         self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Disciplina:</b> {disciplina_nome}", fonte_normal))
         
@@ -366,3 +370,25 @@ class VisualizarQuestoesWindow(QWidget):
         cp = QDesktopWidget().availableGeometry().center()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
+
+    # Adicione este novo método à sua classe VisualizarQuestoesWindow
+    def _salvar_ordem_atual_temas(self):
+        """Pega a ordem atual dos temas da lista e a salva instantaneamente."""
+        try:
+            disciplina_nome = self.disciplina_combo.currentText()
+            disciplina_id = obter_disciplina_id_por_nome(disciplina_nome)
+
+            # Só salva se uma disciplina específica estiver selecionada
+            if disciplina_id:
+                ordem_atual_temas = []
+                for i in range(self.lista_temas.count()):
+                    ordem_atual_temas.append(self.lista_temas.item(i).text())
+
+                # Remove "Todos" da lista antes de salvar, se ele existir
+                if "Todos" in ordem_atual_temas:
+                    ordem_atual_temas.remove("Todos")
+
+                if ordem_atual_temas:
+                    salvar_ordem_temas(ordem_atual_temas, disciplina_id)
+        except Exception as e:
+            print(f"Erro ao salvar a ordem dos temas: {e}")

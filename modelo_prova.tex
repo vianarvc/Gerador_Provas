@@ -189,11 +189,13 @@
     <<% if questao.formato_questao == 'Múltipla Escolha' %>>
         <<% if questao.is_multi_valor %>>
             % Layout Horizontal (com ajuste para warnings)
+            {\footnotesize
             \begin{tasks}[label=\textbf{(\Alph*)}, label-width=2em, label-offset=0.8em](5)
             <<% for letra, texto in questao.alternativas.items()|sort %>>
                 \task << texto >>
             <<% endfor %>>
             \end{tasks}
+            }
         <<% else %>>
             % Layout Vertical
             \begin{enumerate}[label=\textbf{(\Alph*)}, wide, labelwidth=!, labelindent=0pt, leftmargin=*, topsep=0.5cm, itemsep=0.3cm]

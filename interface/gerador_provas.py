@@ -330,10 +330,9 @@ class GeradorProvasWindow(QWidget):
             if not pasta_destino:
                 raise Exception("Nenhuma pasta de destino selecionada. Operação cancelada.")
             
-            # >>> ADICIONE ESTA LINHA PARA PEGAR O TEXTO CORRETO <<<
             disciplina_selecionada = self.disciplina_combo.currentText()
 
-                # Validação para garantir que uma disciplina foi selecionada
+            # Validação para garantir que uma disciplina foi selecionada
             if disciplina_selecionada == "-- Selecione --":
                 QMessageBox.warning(self, "Erro", "Por favor, selecione uma disciplina para a prova.")
                 return
@@ -363,7 +362,7 @@ class GeradorProvasWindow(QWidget):
         except Exception as e:
             error_message = f"Ocorreu um erro: {e}"
             log_dialog.append_log(f"\n❌ ERRO: {error_message}")
-            log_dialog.finish(success=False)
+            self.og_dialog.finish(success=False)
             QMessageBox.critical(self, "Erro na Geração", error_message)
         
         finally:

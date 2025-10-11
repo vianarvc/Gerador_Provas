@@ -120,28 +120,36 @@ def obter_disciplina_nome_por_id(disciplina_id):
         ""
 
 # --- FUNÇÕES DE TEMAS ---
-def salvar_ordem_temas(lista_de_temas):
-    """Salva a ordem customizada dos temas em um arquivo de configuração."""
+def salvar_ordem_temas(lista_de_temas, disciplina_id):
+    """Salva a ordem customizada dos temas para uma disciplina específica."""
+    if not disciplina_id: return # Não salva ordem para "Todas as Disciplinas"
+
     try:
         with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
             settings = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         settings = {}
     
-    settings['ordem_temas'] = lista_de_temas
+    if 'ordem_temas_por_disciplina' not in settings:
+        settings['ordem_temas_por_disciplina'] = {}
+
+    # Usa o ID da disciplina como chave (convertido para string)
+    settings['ordem_temas_por_disciplina'][str(disciplina_id)] = lista_de_temas
     
     with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
         json.dump(settings, f, indent=4)
 
 def obter_temas(disciplina_id=None):
-    """Retorna uma lista de temas, respeitando a ordem salva pelo usuário, filtrada por disciplina."""
+    """Retorna uma lista de temas, respeitando a ordem salva para a disciplina, filtrada por disciplina."""
     ordem_salva = []
-    try:
-        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
-            settings = json.load(f)
-            ordem_salva = settings.get('ordem_temas', [])
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass
+    if disciplina_id:
+        try:
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+                # Carrega a ordem específica da disciplina
+                ordem_salva = settings.get('ordem_temas_por_disciplina', {}).get(str(disciplina_id), [])
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
 
     conn = connect_db()
     cursor = conn.cursor()
@@ -156,6 +164,7 @@ def obter_temas(disciplina_id=None):
     temas_db_set = {row[0] for row in cursor.fetchall()}
     conn.close()
 
+    # A lógica de ordenação agora usa a ordem específica da disciplina
     temas_finais = [tema for tema in ordem_salva if tema in temas_db_set]
     temas_novos = sorted(list(temas_db_set - set(temas_finais)))
     temas_finais.extend(temas_novos)
@@ -296,7 +305,7 @@ def buscar_questoes_para_prova(criterios_granulares, num_versoes=1):
         disciplina_id = criterio['disciplina_id']
         formato = criterio['formato']
         dificuldade = criterio['dificuldade']
-        quantidade_necessaria = criterio['quantidade'] * num_versoes 
+        quantidade_necessaria = criterio['quantidade']
         
         conditions = ["formato_questao = ?", "dificuldade = ?", "ativa = 1"]
         params = [formato, dificuldade]

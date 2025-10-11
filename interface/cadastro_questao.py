@@ -6,16 +6,23 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit, 
     QPushButton, QScrollArea, QMessageBox, QStackedWidget,
     QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QGroupBox, QApplication,
-    QSlider, QToolButton, QRadioButton, QButtonGroup, QDesktopWidget
+    QToolButton, QRadioButton, QButtonGroup, QDesktopWidget, QGridLayout, QComboBox
 )
 from PyQt5.QtGui import QFont, QPixmap, QSyntaxHighlighter, QTextCharFormat, QColor
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from database import salvar_questao, obter_questao_por_id, atualizar_questao, obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, salvar_disciplina, obter_disciplina_nome_por_id
 import gerenciador_imagens
-from .custom_widgets import NoScrollComboBox
+from .custom_widgets import NoScrollComboBox, NoScrollSlider
 import random
+import io
+import sys
+from contextlib import redirect_stdout
+import motor_gerador
+from constants import UNIDADES_PARA_DROPDOWN
 
-UNIDADES_COMUNS = ["", "C", "S", "V", "A", "Ω", "W", "F", "H", "Hz", "s", "m", "g", "kg", "N", "J"]
+#UNIDADES_COMUNS = ["", "e", "C", "N/C", "S", "V", "A", "Ω", "W", "kWh", "F", "H", "Hz", "s", "m", "g", "kg", "N", "J"]
+UNIDADES_COMUNS = UNIDADES_PARA_DROPDOWN
+
 
 class PythonHighlighter(QSyntaxHighlighter):
     """Classe para realçar a sintaxe Python dentro do QTextEdit."""
@@ -61,17 +68,19 @@ class CadastroQuestaoWindow(QWidget):
         self.alternativas_inputs = {} # Corrigido o erro anterior
         self.simbolos_latex = {
             '-- Símbolos --': '',
-            'Ω (Ohm)': '$\\Omega$',
-            'µ (micro)': '$\\mu$',
-            'π (pi)': '$\\pi$',
-            'Δ (delta)': '$\\Delta$',
-            'α (alfa)': '$\\alpha$',
-            'β (beta)': '$\\beta$',
-            'θ (theta)': '$\\theta$',
-            '° (graus)': '^{\\circ}',
-            '± (mais/menos)': '$\\pm$',
-            '√ (raiz)': '$\\sqrt{{}}$',
-            'v (vetor)': '$\\vec{{}}$'
+            'Ω (Ohm)': 'Ω',
+            'µ (micro)': 'µ',
+            'ρ (rho)': 'ρ',
+            'π (pi)': 'π',
+            'Δ (delta)': 'Δ',
+            'α (alfa)': 'α',
+            'β (beta)': 'β',
+            'θ (theta)': 'θ',
+            '° (graus)': '°', # Alterado para o caractere direto
+            '± (mais/menos)': '±', # Alterado para o caractere direto
+            '√ (raiz)': '√', # Alterado para o caractere direto
+            # Comandos que precisam de argumento devem ser mantidos como LaTeX
+            'v (vetor)': '$\\vec{{}}$' 
         }
         self.setWindowTitle("Cadastro de Questão")
         self.resize(950, 800)
@@ -123,7 +132,7 @@ class CadastroQuestaoWindow(QWidget):
         self.disciplina_input.setEditable(True)
         self.disciplina_input.addItems(obter_disciplinas()) # Presumindo 'obter_disciplinas'
         self.disciplina_input.lineEdit().setPlaceholderText("Selecione ou digite uma nova disciplina")
-        self.disciplina_input.activated.connect(self._atualizar_lista_temas)
+        #self.disciplina_input.activated.connect(self._atualizar_lista_temas)
         col_esq.addWidget(self.disciplina_input)
         col_esq.addStretch(1) # Preenche o espaço
         
@@ -140,7 +149,8 @@ class CadastroQuestaoWindow(QWidget):
         col_dir.addWidget(QLabel("Tema:"))
         self.tema_input = NoScrollComboBox() # SOBRESCRITA: esta é a instância final de self.tema_input
         self.tema_input.setEditable(True)
-        self.tema_input.addItems(obter_temas())
+        #self.tema_input.addItems(obter_temas())
+        self.tema_input.setInsertPolicy(QComboBox.NoInsert)
         self.tema_input.lineEdit().setPlaceholderText("Selecione ou digite um novo tema")
         col_dir.addWidget(self.tema_input)
 
@@ -212,13 +222,13 @@ class CadastroQuestaoWindow(QWidget):
 
         self.imagem_preview_label = QLabel("Nenhuma imagem selecionada.")
         self.imagem_preview_label.setAlignment(Qt.AlignCenter)
-        self.imagem_preview_label.setMinimumHeight(80)
+        self.imagem_preview_label.setMinimumHeight(200)
         self.imagem_preview_label.setObjectName("ImagemPreview") 
         layout_imagem.addWidget(self.imagem_preview_label)
 
         slider_layout = QHBoxLayout()
         self.largura_label = QLabel("Largura na Prova: 50%")
-        self.largura_slider = QSlider(Qt.Horizontal)
+        self.largura_slider = NoScrollSlider(Qt.Horizontal)
         self.largura_slider.setRange(10, 100)
         self.largura_slider.setValue(50)
         self.largura_slider.valueChanged.connect(lambda v: self.largura_label.setText(f"Largura na Prova: {v}%"))
@@ -316,11 +326,11 @@ class CadastroQuestaoWindow(QWidget):
 
         # --- INÍCIO DA SEÇÃO MODO 1 ---
         # Checkbox para ativar o modo de Múltiplas Respostas (MODO 1)
-        self.check_tabela_modo1 = QCheckBox("Gerar Resposta Múltipla (MODO 1)")
+        self.check_tabela_modo1 = QCheckBox("Gerar Resposta Múltipla")
         layout_tabela.addWidget(self.check_tabela_modo1)
 
         # Grupo que contém todos os widgets específicos do MODO 1
-        self.group_modo1 = QGroupBox("Variáveis de Saída e Formatação (MODO 1)")
+        self.group_modo1 = QGroupBox("Variáveis de Saída e Formatação")
         layout_modo1 = QVBoxLayout(self.group_modo1)
         
         # Tabela para as Variáveis de Saída (cálculos)
@@ -467,12 +477,28 @@ class CadastroQuestaoWindow(QWidget):
 
         self.formato_combo.currentIndexChanged.connect(self.atualizar_ui_formato)
 
-        # Botão Salvar
+        # Botão Testar
+        self.btn_testar = QPushButton("✔ Testar Código")
+        self.btn_testar.setObjectName("BotaoTestar") # Nome para possível estilização
+        self.btn_testar.setMinimumHeight(45)
+        self.btn_testar.clicked.connect(self._testar_codigo)
+
+        # Botão Salvar (seu código original)
         self.btn_salvar = QPushButton("💾 Salvar Questão")
         self.btn_salvar.setObjectName("BotaoSalvarPrincipal") 
         self.btn_salvar.setMinimumHeight(45)
         self.btn_salvar.clicked.connect(self.salvar_alterar_questao)
-        layout.addWidget(self.btn_salvar)
+        
+        # Layout em grade para garantir alinhamento e tamanhos iguais
+        botoes_layout = QGridLayout()
+        botoes_layout.addWidget(self.btn_testar, 0, 0) # Botão na linha 0, coluna 0
+        botoes_layout.addWidget(self.btn_salvar, 0, 1) # Botão na linha 0, coluna 1
+
+        # Adiciona o layout em grade ao layout principal
+        layout.addLayout(botoes_layout)
+
+        self.disciplina_input.activated.connect(self._atualizar_lista_temas)
+        self._atualizar_lista_temas() # Faz o carregamento inicial dos temas 
 
         self._center()
         self.configurar_modo()
@@ -644,6 +670,21 @@ class CadastroQuestaoWindow(QWidget):
         }
         #BotaoSalvarPrincipal:hover {
             background-color: #27ae60;
+        }
+
+        /* Botão de Teste Principal */
+        #BotaoTestar {
+            background-color: #3498db; /* Azul */
+            color: white;
+            border: none;
+            border-radius: 8px;      
+            font-size: 26px;         
+            font-weight: bold;       
+            margin-top: 15px;        
+        }
+
+        #BotaoTestar:hover {
+            background-color: #2980b9; 
         }
 
         /* BOTÕES SECUNDÁRIOS (Imagem, Adicionar/Remover Tabela) */
@@ -1108,3 +1149,154 @@ class CadastroQuestaoWindow(QWidget):
         else:
             self.titulo_label.setText("Cadastrar Nova Questão")
             self.btn_salvar.setText("💾 Salvar Questão")
+
+    # (Na sua classe CadastroQuestaoWindow, substitua o método _testar_codigo inteiro)
+
+# (Na sua classe CadastroQuestaoWindow, substitua o método _formatar_latex_para_html inteiro)
+
+    def _formatar_latex_para_html(self, texto_latex):
+        """
+        Converte uma string com LaTeX simples para um formato HTML/rich text
+        aproximado, usando o dicionário de símbolos da própria classe.
+        """
+        if not texto_latex:
+            return ""
+
+        texto = texto_latex
+
+        texto = texto.replace('R\\$', 'R$')
+        placeholder_real = "moeda"
+        texto = texto.replace('R$', placeholder_real)
+
+        # 1. Substituições de símbolos usando o dicionário self.simbolos_latex
+        for key, value in self.simbolos_latex.items():
+            if key == '-- Símbolos --':
+                continue # Pula o item placeholder do menu
+
+            # Extrai o caractere unicode da chave (ex: 'Ω' de 'Ω (Ohm)')
+            caractere_unicode = key.split(' ')[0]
+            comando_latex = value
+            
+            # Casos especiais que precisam de tratamento diferente
+            if '\\sqrt' in comando_latex:
+                texto = texto.replace('\\sqrt', '√')
+                continue
+            if '\\vec' in comando_latex:
+                # A conversão de \vec{...} para HTML é complexa. Ignoramos por simplicidade.
+                continue
+
+            # Para os outros, faz a substituição direta do comando pelo caractere
+            if caractere_unicode:
+                texto = texto.replace(comando_latex, caractere_unicode)
+
+        # 2. Converte subscrito e sobrescrito (código anterior, ainda necessário)
+        texto = re.sub(r'\\textbf\{([^}]+)\}', r'<b>\1</b>', texto)    # Negrito
+        texto = re.sub(r'\\textit\{([^}]+)\}', r'<i>\1</i>', texto)    # Itálico
+        texto = re.sub(r'\\underline\{([^}]+)\}', r'<u>\1</u>', texto) # Sublinhado
+        # --- ATUALIZAÇÃO PARA SUBSCRITO/SOBRESCRITO ---
+        # Primeiro, trata os casos com chaves (mais específicos)
+        texto = re.sub(r'_\{([^}]+)\}', r'<sub>\1</sub>', texto)
+        texto = re.sub(r'\^\{([^}]+)\}', r'<sup>\1</sup>', texto)
+        
+        # Depois, trata os casos de caractere único (mais simples)
+        texto = re.sub(r'_([a-zA-Z0-9])', r'<sub>\1</sub>', texto)      # Ex: I_1 -> I<sub>1</sub>
+        texto = re.sub(r'\^([a-zA-Z0-9])', r'<sup>\1</sup>', texto)      # Ex: x^2 -> x<sup>2</sup>
+        # --- FIM DA ATUALIZAÇÃO ---
+
+        # 3. Remove os delimitadores de ambiente matemático ($) que sobraram
+        texto = texto.replace('$', '')
+        texto = texto.replace(placeholder_real, 'R$') # Restaura o 'R$'
+        
+        return texto
+
+    def _testar_codigo(self):
+        """
+        Executa a geração da questão em um loop de busca para encontrar uma
+        variante válida, e exibe o resultado ou o erro final em um pop-up.
+        """
+        # 1. Monta a "questão temporária" com os dados da tela
+        try:
+            num_alternativas = int(self.num_alternativas_input.value()) if hasattr(self, 'num_alternativas_input') else 5
+
+            questao_base = {
+                "id": self.questao_id or 0,
+                "enunciado": self.enunciado_input.toPlainText(),
+                "parametros": self.parametros_input.toPlainText(),
+                "formato_questao": self.formato_combo.currentText(),
+                "gerar_alternativas_auto": self.check_gerar_auto.isChecked(),
+                "permitir_negativos": 1 if self.check_permitir_negativos.isChecked() else 0,
+                "unidade_resposta": self.unidade_input.currentText(),
+                "num_alternativas": num_alternativas,
+                "alternativa_a": self.alternativas_inputs['A'].text(),
+                "alternativa_b": self.alternativas_inputs['B'].text(),
+                "alternativa_c": self.alternativas_inputs['C'].text(),
+                "alternativa_d": self.alternativas_inputs['D'].text(),
+                "alternativa_e": self.alternativas_inputs['E'].text(),
+                "resposta_correta": self.resposta_correta_combo.currentText(),
+            }
+        except Exception as e:
+            QMessageBox.critical(self, "Erro ao Coletar Dados", f"Não foi possível ler os dados da interface para o teste:\n{e}")
+            return
+
+        # --- INÍCIO DA NOVA LÓGICA DE BUSCA ---
+        variante_sucesso = None
+        log_final_erro = ""
+        max_tentativas = 100  # Um limite de segurança para encontrar uma variante válida
+
+        for tentativa in range(max_tentativas):
+            # Usamos uma sequência de sementes previsível para a busca (0, 1, 2, ...)
+            seed_teste = tentativa
+
+            log_stream = io.StringIO()
+            with redirect_stdout(log_stream):
+                try:
+                    # Chama o motor dentro do loop com a semente da vez
+                    variante_tentativa = motor_gerador._gerar_variante_questao(questao_base, seed=seed_teste)
+                except Exception as e:
+                    print(f"ERRO CRÍTICO DURANTE O TESTE (tentativa {tentativa}):\n{e}")
+                    variante_tentativa = None
+
+            log_output = log_stream.getvalue().strip()
+
+            if variante_tentativa:
+                # SUCESSO! Guardamos o resultado e paramos o loop de busca
+                variante_sucesso = variante_tentativa
+                break  # Interrompe o loop na primeira tentativa bem-sucedida
+            else:
+                # FALHA NESTA TENTATIVA. Guardamos o último log de erro para o caso de todas falharem.
+                if log_output:
+                    log_final_erro = log_output
+        # --- FIM DA NOVA LÓGICA DE BUSCA ---
+
+        # 3. Exibe o resultado final após o loop terminar
+        if variante_sucesso:
+            # SUCESSO
+            titulo = "✅ Teste Bem-Sucedido!"
+            
+            variante = variante_sucesso
+            resposta_str = self._formatar_latex_para_html(str(variante.get('resposta_valor')))
+            alternativas_list = variante.get('alternativas_valores', [])
+            alternativas_str = '<br>'.join([f"• {self._formatar_latex_para_html(str(val))}" for val in alternativas_list])
+            if not alternativas_str:
+                alternativas_str = "(Não aplicável ou não gerado)"
+            enunciado_bruto = variante.get('enunciado', '(Não foi possível gerar o enunciado.)')
+            enunciado_str = self._formatar_latex_para_html(enunciado_bruto)
+
+            mensagem = (
+                f"<b>Enunciado Gerado:</b><br>{enunciado_str}"
+                f"<hr>"  # Cria uma linha divisória horizontal
+                f"<b>Resposta Correta:</b><br>{resposta_str}"
+                f"<hr>"  # Cria uma linha divisória horizontal
+                f"<b>Alternativas Geradas:</b><br>{alternativas_str}"
+            )
+            QMessageBox.information(self, titulo, mensagem)
+        else:
+            # FALHA FINAL (após todas as tentativas)
+            titulo = "❌ Teste Falhou Após Múltiplas Tentativas"
+            
+            if log_final_erro:
+                mensagem = f"Após {max_tentativas} tentativas, não foi possível gerar uma variante válida.\n\nÚltimo erro encontrado:\n---\n{log_final_erro}"
+            else:
+                mensagem = f"Após {max_tentativas} tentativas, não foi possível gerar uma variante válida (o motor não retornou um erro específico)."
+            
+            QMessageBox.warning(self, titulo, mensagem)

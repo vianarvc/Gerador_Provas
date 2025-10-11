@@ -5,7 +5,12 @@
         "Eletrodin\u00e2mica",
         "1\u00aa Lei de Ohm",
         "2\u00aa Lei de Ohm",
-        "1\u00aa Lei de Kirchhoff"
+        "1\u00aa Lei de Kirchhoff",
+        "2\u00aa Lei de Kirchhoff",
+        "Associa\u00e7\u00e3o de Resistores - S\u00e9rie",
+        "Associa\u00e7\u00e3o de Resistores - Paralelo",
+        "Divisar de Tens\u00e3o",
+        "Divisor de Corrente"
     ],
     "identificacao": {
         "sigla_curso": "CCTECC",
@@ -13,5 +18,23 @@
         "nome_professor": "Raphael Cruz",
         "nome_escola": "Instituto Federal Fluminense - campus Campos Centro",
         "email_contato": "raphael.cruz@gsuite.iff.edu.br"
+    },
+    "ordem_temas_por_disciplina": {
+        "1": [
+            "Eletrost\u00e1tica",
+            "Eletrodin\u00e2mica",
+            "1\u00aa Lei de Ohm",
+            "2\u00aa Lei de Ohm",
+            "1\u00aa Lei de Kirchhoff",
+            "2\u00aa Lei de Kirchhoff",
+            "Associa\u00e7\u00e3o de Resistores - S\u00e9rie",
+            "Associa\u00e7\u00e3o de Resistores - Paralelo",
+            "Associa\u00e7\u00e3o de Resistores - Mista",
+            "Divisar de Tens\u00e3o",
+            "Divisor de Corrente",
+            "Energia",
+            "Pot\u00eancia",
+            "Capacit\u00e2ncia"
+        ]
     }
 }

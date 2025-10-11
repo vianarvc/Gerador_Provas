@@ -44,7 +44,8 @@
 % --- INÍCIO DA MUDANÇA: MINIPAGE E FBOX ---
 % Cada questão agora é um bloco dentro de uma caixa
 \par\noindent
-\fbox{\begin{minipage}{0.96\textwidth}
+\fcolorbox{black}{white}{%
+\begin{minipage}{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}
 \vspace{0.2cm}
 % --- FIM DA MUDANÇA ---
 
@@ -75,16 +76,13 @@
 <<% if questao.formato_questao == 'Múltipla Escolha' and questao.alternativas %>>
     <<% if questao.is_multi_valor %>>
         % Layout Horizontal (com ajuste para warnings)
-            \begin{tasks}[label=\textbf{(\Alph*)}, label-width=1em, label-offset=0.8em](5)
+            {\footnotesize % Fonte diminuída mais um nível para caber melhor
+            \begin{tasks}[label=\textbf{(\Alph*)}](5)
             <<% for letra, texto in questao.alternativas.items()|sort %>>
-                \task 
-                    <<% if texto == questao.resposta_valor %>>
-                        \textbf{<< texto >>}
-                    <<% else %>>
-                        << texto >>
-                    <<% endif %>>
+                \task <<% if texto == questao.resposta_valor %>>\textbf{<< texto >>}<<% else %>> << texto >> <<% endif %>>
             <<% endfor %>>
             \end{tasks}
+            }
     <<% else %>>
        % Layout Vertical
         \begin{enumerate}[label=\textbf{(\Alph*)}, wide, labelwidth=!, labelindent=0pt, leftmargin=*, topsep=0.5cm, itemsep=0.3cm]
@@ -108,8 +106,9 @@
 %\par\vspace{0.5cm}
 
 % --- INÍCIO DA MUDANÇA: FIM DO MINIPAGE ---
-\end{minipage}}
-\vspace{2mm} % Espaço entre as caixas das questões
+\end{minipage}%
+}
+\vspace{2mm}
 % --- FIM DA MUDANÇA ---
 
 <<% endfor %>>

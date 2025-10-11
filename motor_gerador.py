@@ -6,6 +6,7 @@ from itertools import groupby
 from database import obter_todas_questoes_para_cardapio, obter_disciplina_nome_por_id
 import gerador_pdf
 from PyQt5.QtWidgets import QApplication
+from constants import PREFIX_DIVISORS, VALID_BASE_UNITS
 
 try:
     import numpy as np
@@ -253,7 +254,7 @@ def _gerar_variante_questao(questao_base, seed):
         contexto_formatado = contexto.copy()
 
         import re
-        prefix_divisors = { 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'c': 1e-2, 'm': 1e-3, 'u': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12 }
+        '''prefix_divisors = { 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'c': 1e-2, 'm': 1e-3, 'u': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12 }
         placeholders = re.findall(r'\{(\w+)\}(?:\s*)((?:T|G|M|k|K|c|m|u|µ|n|p)\w{0,2})\b', enunciado_template)
         for var_name, unit_with_prefix in placeholders:
             if var_name in contexto_formatado and isinstance(contexto_formatado[var_name], (int, float)):
@@ -261,6 +262,20 @@ def _gerar_variante_questao(questao_base, seed):
                 if prefix in prefix_divisors:
                     original_value = float(contexto_formatado[var_name])
                     divisor = prefix_divisors[prefix]
+                    converted_value = original_value / divisor
+                    contexto_formatado[var_name] = int(converted_value) if converted_value == int(converted_value) else converted_value'''
+
+        placeholders = re.findall(r'\{(\w+)\}(?:\s*)(\S+)\b', enunciado_template)
+        for var_name, potential_unit_text in placeholders:
+            if var_name in contexto_formatado and isinstance(contexto_formatado[var_name], (int, float)) and len(potential_unit_text) > 1:
+                
+                prefix = potential_unit_text[0]
+                base_unit = potential_unit_text[1:]
+                
+                # A validação agora usa as constantes importadas do arquivo central
+                if prefix in PREFIX_DIVISORS and base_unit in VALID_BASE_UNITS:
+                    original_value = float(contexto_formatado[var_name])
+                    divisor = PREFIX_DIVISORS[prefix]
                     converted_value = original_value / divisor
                     contexto_formatado[var_name] = int(converted_value) if converted_value == int(converted_value) else converted_value
 
@@ -292,7 +307,7 @@ def _gerar_variante_questao(questao_base, seed):
                     pool_de_tuplas = _gerar_pool_combinatorio(questao_base, params, contexto)
 
                     if not pool_de_tuplas:
-                        print(f"AVISO: A questão ID {questao_base.get('id', 'N/A')} não gerou resultados combinatórios. Questão descartada.")
+                        #print(f"AVISO: A questão ID {questao_base.get('id', 'N/A')} não gerou resultados combinatórios. Questão descartada.")
                         return None
 
                     pools_por_variavel = {chave: set() for chave in resposta_valor_calculado["valores"].keys()}
@@ -308,7 +323,7 @@ def _gerar_variante_questao(questao_base, seed):
                             valores_filtrados = {v for v in valores_filtrados if v >= 0}
                         
                         if not valores_filtrados:
-                            print(f"FALHA: A variável '{chave}' da ID {questao_base.get('id', 'N/A')} não teve valores válidos. Questão descartada.")
+                            #print(f"FALHA: A variável '{chave}' da ID {questao_base.get('id', 'N/A')} não teve valores válidos. Questão descartada.")
                             return None
                             
                         pools_filtrados[chave] = list(valores_filtrados)
@@ -323,10 +338,10 @@ def _gerar_variante_questao(questao_base, seed):
                     resposta_correta_dict_numerico = resposta_valor_calculado["valores"]
                     
                     if not permitir_negativos and any(v < 0 for v in resposta_correta_dict_numerico.values() if isinstance(v, (int, float))):
-                        print(f"FALHA: Resposta correta da ID {questao_base.get('id', 'N/A')} contém negativo. Descartada.")
+                        #print(f"FALHA: Resposta correta da ID {questao_base.get('id', 'N/A')} contém negativo. Descartada.")
                         return None
                     if any(abs(v) < 1e-9 for v in resposta_correta_dict_numerico.values() if isinstance(v, (int, float))):
-                        print(f"FALHA: Resposta correta da ID {questao_base.get('id', 'N/A')} contém zero. Descartada.")
+                        #print(f"FALHA: Resposta correta da ID {questao_base.get('id', 'N/A')} contém zero. Descartada.")
                         return None
                     
                     resposta_valor = formatar_dict_inteligentemente(resposta_correta_dict_numerico, formato_texto, unidade)
@@ -345,6 +360,8 @@ def _gerar_variante_questao(questao_base, seed):
                             alternativas_valores.append(distrator_texto)
                         
                         tentativas += 1
+                    
+                    #print(f"DEBUG (ID {questao_base.get('id', 'N/A')} MODO 1): Pool de textos final: {sorted(alternativas_valores)}")
 
                 elif isinstance(resposta_valor_calculado, (int, float)):
                     # --- MODO 2 - RESPOSTA ÚNICA ---              
@@ -369,7 +386,7 @@ def _gerar_variante_questao(questao_base, seed):
 
                         pool_de_textos.add(texto_formatado)
                     
-                    #print(f"DEBUG (ID {questao_base.get('id', 'N/A')}): Pool de textos gerado: {pool_de_textos}")
+                    print(f"DEBUG (ID {questao_base.get('id', 'N/A')}): Pool de textos final (após filtros): {sorted(list(pool_de_textos))}")
 
                     # Valida se o pool final tem alternativas suficientes
                     if len(pool_de_textos) < num_alternativas:
@@ -563,6 +580,7 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
         gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"])]
     elif opcoes_gabarito.get("distribuir", True):
         gabarito_me_v1 = _gerar_gabarito_distribuido(num_questoes_me)
+        random.shuffle(gabarito_me_v1)
     else:
         gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"]) for _ in range(num_questoes_me)]
 
@@ -628,15 +646,18 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
         
     return versoes_finais
 
+# (Em motor_gerador.py, substitua a função inteira)
+
 def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, log_dialog=None):
     """
-    Orquestra a criação do PDF do cardápio, usando um LogDialog.
+    Orquestra a criação do PDF do cardápio, usando um LogDialog e
+    uma lógica resiliente de múltiplas tentativas para gerar cada questão.
     """
     def log_message(message):
         """ Helper local para log. """
         if log_dialog:
             log_dialog.append_log(message)
-            QApplication.processEvents() # <<< A CHAVE PARA NÃO TRAVAR
+            QApplication.processEvents()
         else:
             print(message)
             
@@ -651,7 +672,24 @@ def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, l
         
         questoes_geradas = []
         for questao_base in questoes_base:
-            variante = _gerar_variante_questao(questao_base, seed=questao_base['id'])
+            
+            # --- INÍCIO DA LÓGICA DE TENTATIVAS ---
+            variante = None
+            numero_de_tentativas = 100  # Limite de segurança para não ficar em loop infinito
+
+            for tentativa in range(numero_de_tentativas):
+                # A cada tentativa, usamos uma semente diferente (ID da questão + número da tentativa)
+                seed_da_tentativa = questao_base['id'] + tentativa
+                
+                variante_tentativa = _gerar_variante_questao(questao_base, seed=seed_da_tentativa)
+                
+                # Se a geração foi bem-sucedida, guardamos a variante e paramos de tentar
+                if variante_tentativa:
+                    variante = variante_tentativa
+                    break  # Interrompe o loop de tentativas e vai para a próxima questão
+            # --- FIM DA LÓGICA DE TENTATIVAS ---
+
+            # Apenas se uma variante válida foi encontrada, nós a processamos e adicionamos à lista
             if variante:
                 if variante.get("formato_questao") == "Múltipla Escolha":
                     letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -666,13 +704,16 @@ def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, l
                 variante['ativa'] = questao_base['ativa']
                 variante['disciplina_id'] = questao_base['disciplina_id']
                 questoes_geradas.append(variante)
+            else:
+                # Opcional: Loga a falha final apenas se todas as tentativas falharem
+                log_message(f"AVISO: Questão ID {questao_base['id']} foi descartada do cardápio após {numero_de_tentativas} tentativas falharem.")
+
 
         log_message(f"Geradas {len(questoes_geradas)} variantes para o PDF.")
 
         contexto_extra = { "obter_disciplina_nome_por_id": obter_disciplina_nome_por_id }
         template_path = 'modelo_cardapio.tex'
         
-        # Passa o log_dialog para a função de gerar o PDF
         gerador_pdf.gerar_pdf_cardapio(
             questoes_geradas, caminho_salvar_pdf, template_path, contexto_extra, log_dialog
         )

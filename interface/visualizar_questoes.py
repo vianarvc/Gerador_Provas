@@ -96,7 +96,7 @@ class VisualizarQuestoesWindow(QWidget):
         #BotaoVoltar {
             background-color: #95a5a6; /* Cinza */
             color: white;
-            font-weight: normal;
+        /* A linha 'font-weight: normal;' foi removida para herdar o 'bold' do estilo geral */
         }
         #BotaoVoltar:hover {
             background-color: #7f8c8d;
@@ -172,31 +172,30 @@ class VisualizarQuestoesWindow(QWidget):
         self.scroll_detalhes.setWidget(self.widget_conteudo_detalhes)
         
         # --- NOVO BLOCO: Botões de Ação da Questão (Criados apenas uma vez) ---
-        self.botoes_questao_layout = QHBoxLayout()
-        self.botoes_questao_layout.addStretch() # Empurra os botões para a direita
-        
+        botoes_inferiores_layout = QHBoxLayout()
+        botoes_inferiores_layout.addStretch() # Empurra TODOS os botões para a direita
+
+        # Cria e adiciona o botão Editar
         self.btn_editar = QPushButton("✏️ Editar Questão")
         self.btn_editar.setObjectName("BotaoPrimario")
         self.btn_editar.clicked.connect(self.abrir_edicao)
-        self.botoes_questao_layout.addWidget(self.btn_editar)
+        botoes_inferiores_layout.addWidget(self.btn_editar)
         
+        # Cria e adiciona o botão Excluir
         self.btn_excluir = QPushButton("❌ Excluir Questão")
         self.btn_excluir.setObjectName("BotaoExcluir")
         self.btn_excluir.clicked.connect(self.confirmar_exclusao)
-        self.botoes_questao_layout.addWidget(self.btn_excluir)
-        # --- FIM DO NOVO BLOCO ---
-        
+        botoes_inferiores_layout.addWidget(self.btn_excluir)
+
+        # Cria e adiciona o botão Voltar
         self.btn_voltar_lista = QPushButton("↩️ Voltar para a Lista")
         self.btn_voltar_lista.setObjectName("BotaoVoltar")
         self.btn_voltar_lista.clicked.connect(self._voltar_para_lista)
+        botoes_inferiores_layout.addWidget(self.btn_voltar_lista)
         
+        # Adiciona o scroll de detalhes e o layout unificado dos botões ao layout principal
         layout.addWidget(self.scroll_detalhes)
-        
-        # Adiciona a barra de botões abaixo do scroll de detalhes
-        layout.addLayout(self.botoes_questao_layout) 
-        
-        # Adiciona o botão voltar abaixo da barra de botões (ou onde você preferir)
-        layout.addWidget(self.btn_voltar_lista, 0, Qt.AlignRight)
+        layout.addLayout(botoes_inferiores_layout)
         
         return widget
 

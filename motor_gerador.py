@@ -36,47 +36,58 @@ def _get_math_context():
 
 def formatar_unidade(valor, unidade="", incluir_unidade=True):
     """
-    Formata um número usando notação de engenharia (prefixos k, M, m, µ, etc.).
+    Formata um número usando notação de engenharia, mas APENAS para unidades permitidas.
     - unidade: A unidade base (ex: 'A', 'V', 'Ω').
-    - incluir_unidade: Se False, retorna apenas o número com prefixo e um espaço (ex: "5 m ").
+    - incluir_unidade: Se False, retorna apenas o número com prefixo.
     """
     if not isinstance(valor, (int, float)):
         return str(valor)
 
-    # Usa uma pequena tolerância para tratar números de ponto flutuante quase nulos como zero.
-    if abs(valor) < 1e-9:
-        if incluir_unidade and unidade:
-            return f"0 {unidade}"
-        return "0"
+    # Verifica se a unidade PODE receber um prefixo usando a lista de permissão
+    if unidade in VALID_BASE_UNITS:
+        # --- BLOCO DE LÓGICA DE PREFIXO (só para 'V', 'A', 'F', etc.) ---
 
-    prefixos = [(1e12, 'T'), (1e9, 'G'), (1e6, 'M'), (1e3, 'k'), (1, ''),
-                (1e-3, 'm'), (1e-6, 'µ'), (1e-9, 'n'), (1e-12, 'p')]
+        # Usa uma tolerância para tratar números de ponto flutuante quase nulos como zero.
+        if abs(valor) < 1e-15:
+            if incluir_unidade and unidade:
+                return f"0 {unidade}"
+            return "0"
 
-    for mult, prefixo in prefixos:
-        if abs(valor) >= mult:
-            v_ajustado = valor / mult
-            
-            # Lógica final para formatar inteiros corretamente
-            if round(v_ajustado, 2) == int(round(v_ajustado, 2)):
-                valor_str = str(int(round(v_ajustado, 2)))
-            else:
-                valor_str = f'{v_ajustado:.2f}'.replace('.', ',')
-            
-            if incluir_unidade:
-                return f"{valor_str} {prefixo}{unidade}".strip()
-            else:
-                # Lógica corrigida:
-                if prefixo:
-                    return f"{valor_str} {prefixo}" # Retorna "19 m" (sem espaço no final)
+        prefixos = [(1e12, 'T'), (1e9, 'G'), (1e6, 'M'), (1e3, 'k'), (1, ''),
+                    (1e-3, 'm'), (1e-6, 'µ'), (1e-9, 'n'), (1e-12, 'p')]
+
+        for mult, prefixo in prefixos:
+            if abs(valor) >= mult:
+                v_ajustado = valor / mult
+                
+                if round(v_ajustado, 2) == int(v_ajustado):
+                    valor_str = f"{int(v_ajustado)}"
                 else:
-                    return f"{valor_str} " # Retorna "10 " (com espaço no final)
+                    valor_str = f"{v_ajustado:.2f}".replace('.', ',')
+                
+                if incluir_unidade:
+                    return f"{valor_str} {prefixo}{unidade}".strip()
+                else:
+                    return f"{valor_str} {prefixo}".strip()
+        
+        # Fallback para números menores que 'pico' (ex: femto), usa notação científica.
+        valor_str = f"{valor:.2e}".replace('.', ',')
 
-    # Fallback para números muito pequenos
-    valor_str = f'{valor:.2f}'.replace('.', ',')
-    if incluir_unidade:
-        return f"{valor_str} {unidade}".strip()
     else:
-        return f"{valor_str} "
+        # --- BLOCO SEM PREFIXO (para 'e', 'N/C', 'kWh', etc.) ---
+        # Apenas formata o número.
+        if isinstance(valor, int):
+             valor_str = str(valor)
+        elif round(valor, 2) == int(valor):
+            valor_str = f"{int(round(valor, 2))}"
+        else:
+            valor_str = f"{valor:.2f}".replace('.', ',')
+
+    # Monta a string final para ambos os casos (com ou sem prefixo)
+    if incluir_unidade and unidade:
+        return f"{valor_str} {unidade}"
+    else:
+        return valor_str
 
 def _executar_logica_tabela(params_json, contexto):
     params = json.loads(params_json)
@@ -189,13 +200,13 @@ def _gerar_pool_combinatorio(questao_base, params_code, base_context):
             if isinstance(result, dict) and 'valores' in result:
                 # Para MODO 1, verifica se algum dos valores no dicionário é zero
                 for v in result['valores'].values():
-                    if isinstance(v, (int, float)) and abs(v) < 1e-9: # 1e-9 é uma tolerância para zero em ponto flutuante
+                    if isinstance(v, (int, float)) and abs(v) < 1e-15: # 1e-9 é uma tolerância para zero em ponto flutuante
                         is_zero_present = True
                         break
             elif isinstance(result, (int, float)):
                 # Para MODO 2, verifica se o próprio valor é zero
-                if abs(result) < 1e-9:
-                    is_zero_present = True
+                if abs(result) < 1e-15:
+                    is_zero_present = True         
             
             # Só adiciona ao pool se não houver zero na resposta
             if not is_zero_present:
@@ -254,8 +265,8 @@ def _gerar_variante_questao(questao_base, seed):
         contexto_formatado = contexto.copy()
 
         import re
-        '''prefix_divisors = { 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'c': 1e-2, 'm': 1e-3, 'u': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12 }
-        placeholders = re.findall(r'\{(\w+)\}(?:\s*)((?:T|G|M|k|K|c|m|u|µ|n|p)\w{0,2})\b', enunciado_template)
+        '''prefix_divisors = { 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'm': 1e-3, 'u': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12 }
+        placeholders = re.findall(r'\{(\w+)\}(?:\s*)((?:T|G|M|k|K|m|u|µ|n|p)\w{0,2})\b', enunciado_template)
         for var_name, unit_with_prefix in placeholders:
             if var_name in contexto_formatado and isinstance(contexto_formatado[var_name], (int, float)):
                 prefix = unit_with_prefix[0]
@@ -381,7 +392,8 @@ def _gerar_variante_questao(questao_base, seed):
                         texto_formatado = formatar_unidade(valor_num, unidade)
                         
                         # Filtro anti-zero, que agora funciona corretamente
-                        if texto_formatado.strip().startswith('0'):
+                        #if texto_formatado.strip().startswith('0'):
+                        if abs(valor_num) < 1e-15:
                             continue
 
                         pool_de_textos.add(texto_formatado)

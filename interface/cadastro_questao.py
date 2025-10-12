@@ -71,11 +71,13 @@ class CadastroQuestaoWindow(QWidget):
             'Ω (Ohm)': 'Ω',
             'µ (micro)': 'µ',
             'ρ (rho)': 'ρ',
-            'π (pi)': 'π',
+            'ε (epsilon)': 'ε',
+            'η (eta)': 'η',
             'Δ (delta)': 'Δ',
             'α (alfa)': 'α',
             'β (beta)': 'β',
             'θ (theta)': 'θ',
+            'π (pi)': 'π',
             '° (graus)': '°', # Alterado para o caractere direto
             '± (mais/menos)': '±', # Alterado para o caractere direto
             '√ (raiz)': '√', # Alterado para o caractere direto
@@ -172,7 +174,7 @@ class CadastroQuestaoWindow(QWidget):
         self.fonte_input.setPlaceholderText("Ex: Livro X, Ed. Y, p. 123")
         layout.addWidget(self.fonte_input)
         
-        layout.addWidget(QLabel("Enunciado da Questão (pode usar comandos LaTeX):"))
+        layout.addWidget(QLabel("Enunciado da Questão (Comandos LaTeX):"))
 
         # Toolbar do Enunciado
         toolbar_enunciado = QHBoxLayout()
@@ -201,7 +203,7 @@ class CadastroQuestaoWindow(QWidget):
         # AJUSTE 2: Altura maior para o Enunciado
         self.enunciado_input = QTextEdit()
         self.enunciado_input.setPlaceholderText("Use {variavel} para inserir valores...")
-        self.enunciado_input.setFixedHeight(180) # Aumentado de 120 para 180
+        self.enunciado_input.setFixedHeight(180) 
         layout.addWidget(self.enunciado_input)
 
         # Grupo Imagem
@@ -227,10 +229,10 @@ class CadastroQuestaoWindow(QWidget):
         layout_imagem.addWidget(self.imagem_preview_label)
 
         slider_layout = QHBoxLayout()
-        self.largura_label = QLabel("Largura na Prova: 50%")
+        self.largura_label = QLabel("Largura na Prova: 40%")
         self.largura_slider = NoScrollSlider(Qt.Horizontal)
         self.largura_slider.setRange(10, 100)
-        self.largura_slider.setValue(50)
+        self.largura_slider.setValue(40)
         self.largura_slider.valueChanged.connect(lambda v: self.largura_label.setText(f"Largura na Prova: {v}%"))
         slider_layout.addWidget(self.largura_label)
         slider_layout.addWidget(self.largura_slider)
@@ -480,13 +482,13 @@ class CadastroQuestaoWindow(QWidget):
         # Botão Testar
         self.btn_testar = QPushButton("✔ Testar Código")
         self.btn_testar.setObjectName("BotaoTestar") # Nome para possível estilização
-        self.btn_testar.setMinimumHeight(45)
+        self.btn_testar.setMinimumHeight(60)
         self.btn_testar.clicked.connect(self._testar_codigo)
 
         # Botão Salvar (seu código original)
         self.btn_salvar = QPushButton("💾 Salvar Questão")
         self.btn_salvar.setObjectName("BotaoSalvarPrincipal") 
-        self.btn_salvar.setMinimumHeight(45)
+        self.btn_salvar.setMinimumHeight(60)
         self.btn_salvar.clicked.connect(self.salvar_alterar_questao)
         
         # Layout em grade para garantir alinhamento e tamanhos iguais
@@ -1165,8 +1167,9 @@ class CadastroQuestaoWindow(QWidget):
         texto = texto_latex
 
         texto = texto.replace('R\\$', 'R$')
-        placeholder_real = "moeda"
-        texto = texto.replace('R$', placeholder_real)
+        texto = texto.replace('\\%', '%')
+        #placeholder_real = "moeda"
+        #texto = texto.replace('R$', placeholder_real)
 
         # 1. Substituições de símbolos usando o dicionário self.simbolos_latex
         for key, value in self.simbolos_latex.items():
@@ -1205,7 +1208,7 @@ class CadastroQuestaoWindow(QWidget):
 
         # 3. Remove os delimitadores de ambiente matemático ($) que sobraram
         texto = texto.replace('$', '')
-        texto = texto.replace(placeholder_real, 'R$') # Restaura o 'R$'
+        #texto = texto.replace(placeholder_real, 'R$') # Restaura o 'R$'
         
         return texto
 
@@ -1241,7 +1244,7 @@ class CadastroQuestaoWindow(QWidget):
         # --- INÍCIO DA NOVA LÓGICA DE BUSCA ---
         variante_sucesso = None
         log_final_erro = ""
-        max_tentativas = 100  # Um limite de segurança para encontrar uma variante válida
+        max_tentativas = 500  # Um limite de segurança para encontrar uma variante válida
 
         for tentativa in range(max_tentativas):
             # Usamos uma sequência de sementes previsível para a busca (0, 1, 2, ...)

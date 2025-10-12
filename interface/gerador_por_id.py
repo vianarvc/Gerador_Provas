@@ -131,7 +131,7 @@ class GeradorPorIdWindow(QWidget):
 
     # Lógica de verificação para checar status 'ativa' ---
     def _verificar_ids(self):
-        self.questoes_ativas_verificadas.clear() # Limpa a lista de questões válidas
+        self.questoes_ativas_verificadas.clear()
         self.lista_questoes_carregadas.clear()
 
         texto_ids = self.ids_input.toPlainText()
@@ -140,33 +140,38 @@ class GeradorPorIdWindow(QWidget):
             return
 
         ids_str = re.findall(r'\d+', texto_ids)
-        lista_ids = [int(id_str) for id_str in ids_str]
+        lista_ids_usuario = [int(id_str) for id_str in ids_str]
 
-        if not lista_ids:
+        if not lista_ids_usuario:
             QMessageBox.warning(self, "Aviso", "Nenhum número de ID válido foi encontrado no texto.")
             return
 
-        todas_questoes_encontradas = buscar_questoes_por_ids(lista_ids)
-        mapa_questoes = {q['id']: q for q in todas_questoes_encontradas}
+        # Busca no banco de dados. A função deve ser capaz de encontrar questões
+        # mesmo que estejam inativas para que possamos reportar o status corretamente.
+        questoes_do_banco = buscar_questoes_por_ids(lista_ids_usuario)
+        mapa_questoes_encontradas = {q['id']: q for q in questoes_do_banco}
 
-        if not todas_questoes_encontradas:
-            self.lista_questoes_carregadas.addItem(f"❌ ID {q_id}: NÃO ENCONTRADO OU INATIVO")
-            return
+        # Itera sobre a lista de IDs que o USUÁRIO digitou para dar feedback para cada um.
+        for q_id in lista_ids_usuario:
+            questao_encontrada = mapa_questoes_encontradas.get(q_id)
 
-        for q_id in lista_ids:
-            resumo = "..."
-            questao = mapa_questoes.get(q_id)
-
-            if questao and questao.get("ativa", 1):
-                resumo_txt = questao['enunciado'].replace('\n', ' ')
-                if len(resumo_txt) > 80: resumo_txt = resumo_txt[:80] + "..."
-                
-                self.lista_questoes_carregadas.addItem(f"✅ ID {q_id}: {resumo_txt}")
-                self.questoes_ativas_verificadas.append(questao) # Adiciona à lista de geração
+            # Verifica o status da questão encontrada
+            if questao_encontrada:
+                # A chave "ativa" pode ser 1 (ativa) ou 0 (inativa).
+                if questao_encontrada.get("ativa", 1):
+                    # Caso 1: Questão encontrada E ATIVA
+                    resumo_txt = questao_encontrada['enunciado'].replace('\n', ' ')
+                    if len(resumo_txt) > 80:
+                        resumo_txt = resumo_txt[:80] + "..."
+                    
+                    self.lista_questoes_carregadas.addItem(f"✅ ID {q_id}: {resumo_txt}")
+                    self.questoes_ativas_verificadas.append(questao_encontrada)
+                else:
+                    # Caso 2: Questão encontrada mas INATIVA
+                    self.lista_questoes_carregadas.addItem(f"❌ ID {q_id}: INATIVA")
             else:
-                # Se a questão não foi encontrada OU foi encontrada mas está inativa,
-                # o tratamento é o mesmo: NÃO ENCONTRADO.
-                self.lista_questoes_carregadas.addItem(f"❌ ID {q_id}: NÃO ENCONTRADO OU INATIVO")
+                # Caso 3: Questão NÃO ENCONTRADA no mapa (não retornou do banco)
+                self.lista_questoes_carregadas.addItem(f"❌ ID {q_id}: NÃO ENCONTRADA")
     
     def _carregar_disciplinas(self):
         self.disciplina_combo.clear()

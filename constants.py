@@ -14,5 +14,22 @@ UNIDADES_PARA_DROPDOWN = ["", "e", "C", "N/C", "S", "V", "A", "Ω", "W", "kWh", 
 # Derivamos esta lista da sua, pegando apenas as unidades que podem receber prefixos.
 # Usamos um set para buscas mais rápidas.
 VALID_BASE_UNITS = {
-    'V', 'A', 'W', 'F', 'H', 'Hz', 's', 'm', 'g', 'N', 'J', 'C', 'S'
+    # Unidades Elétricas
+    'V',  # Volt
+    'A',  # Ampere
+    'W',  # Watt
+    'F',  # Farad
+    'H',  # Henry
+    'Hz', # Hertz
+    'Ω',  # Ohm
+    'C',  # Coulomb
+    'S',  # Siemens
+    
+    # Unidades Físicas Comuns
+    's',  # segundo
+    'm',  # metro
+    'g',  # grama
+    'N',  # Newton
+    'J',  # Joule
+    'Pa'  # Pascal
 }

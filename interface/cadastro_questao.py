@@ -58,7 +58,9 @@ class PythonHighlighter(QSyntaxHighlighter):
             for match in re.finditer(pattern, text): 
                 self.setFormat(match.start(), match.end() - match.start(), format)
 
-class CadastroQuestaoWindow(QWidget):
+class CadastroQuestaoScreen(QWidget):
+    cadastro_concluido = pyqtSignal()  # Sinal para avisar que salvou/atualizou
+    voltar_pressed = pyqtSignal() # Sinal para avisar que quer cancelar/voltar
     questao_atualizada = pyqtSignal()
     
     def __init__(self, questao_id=None):
@@ -84,8 +86,8 @@ class CadastroQuestaoWindow(QWidget):
             # Comandos que precisam de argumento devem ser mantidos como LaTeX
             'v (vetor)': '$\\vec{{}}$' 
         }
-        self.setWindowTitle("Cadastro de Questão")
-        self.resize(950, 800)
+        #self.setWindowTitle("Cadastro de Questão")
+        #self.resize(950, 800)
         self._aplicar_estilos() 
 
         layout_principal = QVBoxLayout(self)
@@ -479,30 +481,35 @@ class CadastroQuestaoWindow(QWidget):
 
         self.formato_combo.currentIndexChanged.connect(self.atualizar_ui_formato)
 
-        # Botão Testar
+        # --- Crie o novo botão Voltar/Cancelar ---
+        self.btn_voltar = QPushButton("↩️ Voltar/Cancelar")
+        self.btn_voltar.setObjectName("BotaoVoltar") # Usa o estilo cinza que já definimos
+
         self.btn_testar = QPushButton("✔ Testar Código")
-        self.btn_testar.setObjectName("BotaoTestar") # Nome para possível estilização
-        self.btn_testar.setMinimumHeight(60)
+        self.btn_testar.setObjectName("BotaoTestar")
+
+        self.btn_salvar = QPushButton("💾 Salvar Questão")
+        self.btn_salvar.setObjectName("BotaoSalvarPrincipal")
+
+        # --- Conecte os botões para emitir os sinais ---
+        self.btn_salvar.clicked.connect(self.salvar_alterar_questao) # A mudança será DENTRO deste método
+        self.btn_voltar.clicked.connect(self.voltar_pressed.emit) # Este emite o sinal para voltar
         self.btn_testar.clicked.connect(self._testar_codigo)
 
-        # Botão Salvar (seu código original)
-        self.btn_salvar = QPushButton("💾 Salvar Questão")
-        self.btn_salvar.setObjectName("BotaoSalvarPrincipal") 
-        self.btn_salvar.setMinimumHeight(60)
-        self.btn_salvar.clicked.connect(self.salvar_alterar_questao)
-        
-        # Layout em grade para garantir alinhamento e tamanhos iguais
+        # Adiciona os 3 botões ao layout
         botoes_layout = QGridLayout()
-        botoes_layout.addWidget(self.btn_testar, 0, 0) # Botão na linha 0, coluna 0
-        botoes_layout.addWidget(self.btn_salvar, 0, 1) # Botão na linha 0, coluna 1
+        botoes_layout.addWidget(self.btn_voltar, 0, 0)
+        botoes_layout.addWidget(self.btn_testar, 0, 1)
+        botoes_layout.addWidget(self.btn_salvar, 0, 2)
+        layout.addLayout(botoes_layout)
 
         # Adiciona o layout em grade ao layout principal
-        layout.addLayout(botoes_layout)
+        #layout.addLayout(botoes_layout)
 
         self.disciplina_input.activated.connect(self._atualizar_lista_temas)
         self._atualizar_lista_temas() # Faz o carregamento inicial dos temas 
 
-        self._center()
+        #self._center()
         self.configurar_modo()
         self.atualizar_ui_formato()
 
@@ -659,6 +666,20 @@ class CadastroQuestaoWindow(QWidget):
         QToolButton:hover {
             background-color: #c9d2d7;
         }
+
+        /* Cor específica para o botão Voltar (Cinza) */
+            #BotaoVoltar {
+                background-color: #7f8c8d;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 26px;
+                font-weight: bold;
+                margin-top: 15px;
+            }
+            #BotaoVoltar:hover {
+                background-color: #95a5a6;
+            }
         
         /* BOTÕES DE AÇÃO PRINCIPAL (Salvar) */
         #BotaoSalvarPrincipal {
@@ -1018,7 +1039,7 @@ class CadastroQuestaoWindow(QWidget):
                 QMessageBox.information(self, "Sucesso", "Questão salva com sucesso!")
             
             self.questao_atualizada.emit()
-            self.close()
+            self.cadastro_concluido.emit() # <-- AVISA a MainWindow que terminou com sucesso
         except Exception as e:
             QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")
     
@@ -1303,3 +1324,70 @@ class CadastroQuestaoWindow(QWidget):
                 mensagem = f"Após {max_tentativas} tentativas, não foi possível gerar uma variante válida (o motor não retornou um erro específico)."
             
             QMessageBox.warning(self, titulo, mensagem)
+
+    def sizeHint(self):
+        """Informa à MainWindow qual o tamanho ideal para esta tela."""
+        return QSize(950, 800)
+    
+    def _limpar_formulario(self):
+        """Reseta todos os campos do formulário para o estado inicial de forma segura."""
+        self.check_ativa.setChecked(True)
+        self.formato_combo.setCurrentIndex(0)
+        
+        self.disciplina_input.setCurrentIndex(-1)
+        self.disciplina_input.lineEdit().clear()
+        
+        self.tema_input.clear()
+        self.tema_input.lineEdit().clear()
+
+        self.dificuldade_combo.setCurrentIndex(0)
+        self.grupo_input.clear()
+        self.fonte_input.clear()
+        self.enunciado_input.clear()
+        
+        self._remover_imagem()
+        
+        # Antes de acessar os widgets das "páginas", verifica se eles existem
+        if hasattr(self, 'parametros_input'):
+            self.parametros_input.clear()
+
+        self.unidade_input.setCurrentIndex(0)
+        self.check_permitir_negativos.setChecked(False)
+        self.check_teorica.setChecked(False)
+
+        if hasattr(self, 'alternativas_inputs'):
+            for letra in self.alternativas_inputs:
+                self.alternativas_inputs[letra].clear()
+
+        # Antes de acessar self.resposta_group, verifica se o atributo existe.
+        if hasattr(self, 'resposta_group') and self.resposta_group.checkedButton():
+            self.resposta_group.setExclusive(False)
+            self.resposta_group.checkedButton().setChecked(False)
+            self.resposta_group.setExclusive(True)
+
+        # --- A NOVA CORREÇÃO ESTÁ AQUI ---
+        # Antes de acessar self.radio_python, verifica se o atributo existe.
+        if hasattr(self, 'radio_python'):
+            self.radio_python.setChecked(True)
+
+    def abrir_para_criacao(self):
+        """Prepara a tela para cadastrar uma nova questão."""
+        self.setWindowTitle("Cadastrar Nova Questão")
+        self.questao_id = None
+        self.titulo_label.setText("Cadastro de Nova Questão")
+        self._limpar_formulario() # Usa seu método de limpar já existente
+        self.atualizar_ui_formato()
+
+    def abrir_para_edicao(self, questao_id):
+        """Prepara a tela para editar uma questão existente."""
+        self.setWindowTitle(f"Editar Questão ID: {questao_id}")
+        self.questao_id = questao_id
+        if self.questao_id is None:
+            # Se por algum motivo o ID for nulo, volta para a tela anterior
+            self.voltar_pressed.emit()
+            return
+            
+        self.titulo_label.setText(f"Editando Questão ID: {self.questao_id}")
+        self._limpar_formulario()
+        self.carregar_dados_questao() # Usa seu método de carregar já existente
+        self.atualizar_ui_formato()

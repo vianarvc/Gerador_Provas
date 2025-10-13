@@ -1,7 +1,5 @@
 # interface/gerador_provas.py
 
-# interface/gerador_provas.py
-
 import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
@@ -9,7 +7,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QGridLayout, QDesktopWidget, QApplication
 )
 from PyQt5.QtGui import QFont, QIcon
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from database import (
     obter_temas, buscar_questoes_para_prova, contar_questoes_por_criterio,
     obter_disciplinas, obter_disciplina_id_por_nome, carregar_configuracoes
@@ -19,23 +17,41 @@ from gerador_pdf import criar_pdf_provas
 from .custom_widgets import NoScrollComboBox, NoScrollSpinBox, NoScrollDoubleSpinBox
 from .log_dialog import LogDialog
 
-class GeradorProvasWindow(QWidget):
+class GeradorProvasScreen(QWidget):
+    voltar_pressed = pyqtSignal()
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Gerador de Provas por Critérios")
-        self.resize(800, 900)
+
+        self.setWindowTitle("Gerar Prova por Critérios")
+
         self._aplicar_estilos() 
         
+        # O layout principal da tela agora conterá apenas a área de rolagem
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10) # Margem para a janela toda
+
+        # 1. Criar a QScrollArea que conterá tudo
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setObjectName("ScrollPrincipal") # Para estilização, se necessário
+        main_layout.addWidget(scroll_area)
+
+        # 2. Criar um widget que servirá como "página" dentro da rolagem
+        scroll_content_widget = QWidget()
+        scroll_area.setWidget(scroll_content_widget)
         
+        # 3. Criar o layout para esta "página". Todo o seu conteúdo vai aqui dentro.
+        content_layout = QVBoxLayout(scroll_content_widget)
+
+        # O Título vai para o layout de conteúdo
         titulo_label = QLabel("Gerador Automático de Provas")
         titulo_label.setObjectName("TituloPrincipal")
-        main_layout.addWidget(titulo_label)
+        content_layout.addWidget(titulo_label)
 
         # --- Bloco 1: Configurações da Avaliação (VERSÃO CORRIGIDA) ---
         config_group = QGroupBox("Configurações da Avaliação")
         config_layout = QVBoxLayout(config_group)
-        main_layout.addWidget(config_group)
+        content_layout.addWidget(config_group) # Adicionado ao layout de conteúdo
 
         config_layout.addWidget(QLabel("Nome da Avaliação:"))
         self.nome_input = QLineEdit()
@@ -85,7 +101,7 @@ class GeradorProvasWindow(QWidget):
         disciplina_layout.addWidget(self.disciplina_combo, 1)
         self.layout_questoes.addLayout(disciplina_layout)
         
-        main_layout.addWidget(questoes_group)
+        content_layout.addWidget(questoes_group) # Adicionado ao layout de conteúdo
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -133,17 +149,60 @@ class GeradorProvasWindow(QWidget):
         rotacao_layout.addWidget(self.rotacao_spinbox)
         rotacao_layout.addStretch()
         gabarito_main_layout.addLayout(rotacao_layout)
-        main_layout.addWidget(gabarito_group)
+        content_layout.addWidget(gabarito_group) # Adicionado ao layout de conteúdo
 
 
         # --- Bloco 4: Botão Gerar (sem alteração) ---
+        '''self.btn_gerar = QPushButton("🚀 Gerar Prova")
+        self.btn_gerar.setObjectName("BotaoPrincipal")
+        self.btn_gerar.setMinimumHeight(60)
+        self.btn_gerar.clicked.connect(self._gerar_prova)
+        content_layout.addWidget(self.btn_gerar, 0, Qt.AlignCenter)'''
+
+        botoes_finais_layout = QHBoxLayout()
+        self.btn_voltar = QPushButton("↩️ Voltar ao Menu")
+        self.btn_voltar.setObjectName("BotaoVoltar") # Usa o estilo cinza
+        # A conexão será feita no próximo passo
+        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)
+        
         self.btn_gerar = QPushButton("🚀 Gerar Prova")
         self.btn_gerar.setObjectName("BotaoPrincipal")
         self.btn_gerar.setMinimumHeight(60)
         self.btn_gerar.clicked.connect(self._gerar_prova)
-        main_layout.addWidget(self.btn_gerar, 0, Qt.AlignCenter)
+
+        botoes_finais_layout.addWidget(self.btn_voltar)
+        botoes_finais_layout.addStretch()
+        botoes_finais_layout.addWidget(self.btn_gerar)
+        content_layout.addLayout(botoes_finais_layout)
         
-        #self._center() 
+        #self._center()
+
+    def sizeHint(self):
+        """Informa à MainWindow qual o tamanho ideal para esta tela."""
+        return QSize(1100, 900)
+    
+    def _limpar_campos(self):
+        """Limpa todos os campos e reseta a tela para o estado inicial."""
+        self.nome_input.clear()
+        self.bimestre_input.setText("1")
+        self.versoes_spinbox.setValue(1)
+        self.valor_total_spinbox.setValue(10.0)
+        self.disciplina_combo.setCurrentIndex(0)
+
+        # Remove todas as linhas de critério, exceto a primeira
+        while len(self.linhas_tema) > 1:
+            linha_ref = self.linhas_tema.pop()
+            linha_ref["widget"].deleteLater()
+        
+        # Limpa os campos da primeira linha
+        if self.linhas_tema:
+            primeira_linha = self.linhas_tema[0]
+            primeira_linha["combo"].clear()
+            for formato in primeira_linha["spins"]:
+                for dificuldade in primeira_linha["spins"][formato]:
+                    primeira_linha["spins"][formato][dificuldade]["spin"].setValue(0)
+        
+        self._disciplina_selecionada()
 
     # --- MUDANÇA 4: Novas funções para carregar e selecionar disciplina ---
     def _carregar_disciplinas(self):
@@ -434,6 +493,21 @@ class GeradorProvasWindow(QWidget):
              background-color: #ecf0f1;
         }
         
+        /* BOTÃO VOLTAR  */
+        #BotaoVoltar {
+            background-color: #7f8c8d; /* Cinza */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 30px;
+            font-weight: bold;
+            margin-top: 15px;
+            min-width: 300px
+        }
+        #BotaoVoltar:hover {
+            background-color: #95a5a6;
+        }
+
         /* BOTÃO PRINCIPAL (Gerar Prova) */
         #BotaoPrincipal {
             background-color: #2ecc71; /* Verde */
@@ -473,12 +547,12 @@ class GeradorProvasWindow(QWidget):
         """
         self.setStyleSheet(style)
 
-    def _center(self): 
+    '''def _center(self): 
         """ Centraliza a janela na tela. """
         qr = self.frameGeometry()
         cp = QDesktopWidget().availableGeometry().center()
         qr.moveCenter(cp)
-        self.move(qr.topLeft())
+        self.move(qr.topLeft())'''
 
     def _remover_linha_tema(self, linha_widget):
         if len(self.linhas_tema) <= 1:
@@ -496,7 +570,7 @@ class GeradorProvasWindow(QWidget):
         for linha in self.linhas_tema:
             self._atualizar_contadores_linha(linha)
 
-    def showEvent(self, event):
+    '''def showEvent(self, event):
         """Este método é chamado automaticamente pelo Qt antes de a janela ser exibida."""
         self._center()
-        super().showEvent(event)
+        super().showEvent(event)'''

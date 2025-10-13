@@ -2,8 +2,9 @@
 
 import sys
 from PyQt5.QtWidgets import QApplication
+from interface.main_window import MainWindow
 from PyQt5.QtGui import QFont
-from interface.MenuInicial import MenuInicialWindow
+#from interface.MenuInicial import MenuInicialWindow
 from database import init_db
 
 if __name__ == '__main__':
@@ -17,6 +18,6 @@ if __name__ == '__main__':
     default_font = QFont("Arial", 12)
     app.setFont(default_font)
     
-    window = MenuInicialWindow()
+    window = MainWindow()
     window.show()
     sys.exit(app.exec_())

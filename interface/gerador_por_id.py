@@ -137,18 +137,17 @@ class GeradorPorIdScreen(QWidget):
 
         # --- Botões Finais ---
         botoes_finais_layout = QHBoxLayout()
-        self.btn_voltar = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
-        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)
+        '''self.btn_voltar = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
+        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)'''
         self.btn_gerar = MeuBotao("🚀 Gerar Prova", tipo="principal")
         self.btn_gerar.clicked.connect(self._gerar_prova)
-        botoes_finais_layout.addWidget(self.btn_voltar)
+        #botoes_finais_layout.addWidget(self.btn_voltar)
+        botoes_finais_layout.addStretch()
         botoes_finais_layout.addWidget(self.btn_gerar)
         content_layout.addLayout(botoes_finais_layout)
 
         # 4. Conectar a "página" à área de rolagem
         scroll_area.setWidget(scroll_content_widget)
-
-        botoes_finais_layout.addStretch()
 
         # 5. Adicionar a área de rolagem ao layout principal da tela
         main_layout.addWidget(scroll_area)

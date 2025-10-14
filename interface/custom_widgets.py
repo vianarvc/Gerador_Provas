@@ -261,6 +261,25 @@ class MeuBotao(QPushButton):
                     background-color: #27ae60;
                 }
             """
+        elif self.tipo == "navegacao":
+            # Cinza sutil para navegação na barra superior
+            style = """
+                QPushButton {
+                    background-color: #7f8c8d;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    
+                    /* Tamanho menor e mais apropriado */
+                    font-size: 14px;
+                    padding: 5px 15px;
+                    min-height: 30px;
+                }
+                QPushButton:hover {
+                    background-color: #95a5a6;
+                }
+            """
         elif self.tipo == "voltar":
             # Cinza, botão voltar
             style = """

@@ -6,9 +6,11 @@ import shutil
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QDesktopWidget, QAction,
     QMessageBox, QFileDialog, QDialog, QScrollArea, QVBoxLayout, QLabel,
-    QPushButton
+    QPushButton, QWidget, QHBoxLayout, QToolBar, QAction, QWidgetAction, QSizePolicy,
+    QToolButton, QMenu
 )
 from PyQt5.QtCore import Qt
+from .custom_widgets import MeuBotao
 
 from .MenuInicial import MenuInicialWindow as MainMenuScreen
 from .visualizar_questoes import VisualizarQuestoesScreen
@@ -25,15 +27,17 @@ import motor_gerador
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.navigation_history = []
         self.setWindowTitle("Gerador de Provas")
-
         self.is_first_show = True
-        self._aplicar_estilos()
-        self._criar_menu_superior()
-
+        self._aplicar_estilos() # Aplica o estilo da QMenuBar
+        
+        # 1. Chamamos o novo método que cria nossa barra superior única
+        self._criar_barra_superior_unificada()
+        
+        # 2. O QStackedWidget continua sendo o widget central
         self.stacked_widget = QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
-        self.stacked_widget.currentChanged.connect(self._on_screen_changed)
         
         # Criação das telas
         self.main_menu = MainMenuScreen()
@@ -54,18 +58,21 @@ class MainWindow(QMainWindow):
         self.main_menu.visualizar_questoes_pressed.connect(self.show_visualizar_questoes)
         self.main_menu.gerar_cardapio_pressed.connect(self._abrir_gerador_cardapio)
         self.main_menu.gerar_prova_pressed.connect(self.abrir_gerador_prova)
-        self.visualizar_screen.back_to_main_menu_pressed.connect(self.show_main_menu)
+        self.visualizar_screen.back_to_main_menu_pressed.connect(self.navigate_back)
         self.visualizar_screen.edit_questao_pressed.connect(self.show_cadastro_para_edicao)
         self.cadastro_screen.cadastro_concluido.connect(self.show_visualizar_questoes)
         self.cadastro_screen.voltar_pressed.connect(self.navigate_back)
-        self.gerador_id_screen.voltar_pressed.connect(self.show_main_menu)
-        self.gerador_criterios_screen.voltar_pressed.connect(self.show_main_menu)
+        self.gerador_id_screen.voltar_pressed.connect(self.navigate_back)
+        self.gerador_criterios_screen.voltar_pressed.connect(self.navigate_back)
 
         self.gerador_window = None
         self.previous_screen = None
 
-        # Chamada inicial
-        self.stacked_widget.setCurrentWidget(self.main_menu)
+        #  CONECTA O SINAL DE TROCA DE TELA AO MÉTODO DE AJUSTE
+        self.stacked_widget.currentChanged.connect(self._on_screen_changed)
+
+        #  FORÇA UMA CHAMADA INICIAL PARA AJUSTAR LOGO AO ABRIR
+        self._on_screen_changed(self.stacked_widget.currentIndex())
 
     def showEvent(self, event):
         """ É chamado ANTES de a janela ser exibida. """
@@ -80,23 +87,54 @@ class MainWindow(QMainWindow):
 
     def _aplicar_estilos(self):
         style = """
-            QMainWindow { background-color: #f7f7f7; }
+            QMainWindow { background-color: #f7f7ff; }
             
-            /* --- TEMA AZUL ESCURO --- */
-            
-            /* Cor principal da barra (Azul Marinho) */
-            QMenuBar, QMenu { 
+            /* A barra superior unificada */
+            #TopBar { 
                 background-color: #001f3f; 
                 color: white; 
-                border: 1px solid #001f3f; 
+                border: none;
+                padding: 2px;
+                spacing: 5px;
             }
-            
-            /* Cor da barra ao passar o mouse (um pouco mais escura) */
-            QMenuBar::item:selected { 
-                background: #001a33; 
+
+            /* --- NOVO ESTILO EXCLUSIVO PARA A SETA --- */
+            /* Botão de VOLTAR (seta) com fonte maior */
+            #VoltarToolButton {
+                color: white;
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px; /* Padding ajustado para o ícone maior */
+                font-size: 22px;  /* Fonte significativamente maior para a seta */
+                font-weight: bold;
             }
-            
-            /* Cor do item selecionado no menu (Azul Royal para destaque) */
+            #VoltarToolButton:hover, #VoltarToolButton:pressed {
+                background-color: #001a33; /* Efeito de hover/clique */
+            }
+
+            /* --- ESTILO ANTIGO, AGORA SÓ PARA OS MENUS --- */
+            /* Botões de MENU (Dados, etc.) com fonte normal */
+            #MenuToolButton {
+                color: white;
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            #MenuToolButton::menu-indicator { image: none; }
+            #MenuToolButton:hover, #MenuToolButton:pressed {
+                background-color: #001a33;
+            }
+
+            /* O menu suspenso que aparece */
+            QMenu { 
+                background-color: #001f3f; 
+                color: white; 
+                border: 1px solid #001a33; 
+            }
             QMenu::item:selected { 
                 background-color: #4169E1; 
             }
@@ -110,75 +148,126 @@ class MainWindow(QMainWindow):
         self.move(qr.topLeft())
 
     def show_main_menu(self):
+        self.navigation_history.clear() # Limpa o histórico ao voltar para o menu
         self.stacked_widget.setCurrentWidget(self.main_menu)
-        self.resize(self.main_menu.sizeHint())
-        self._center()
+        '''self.resize(self.main_menu.sizeHint())
+        self._center()'''
 
     def show_visualizar_questoes(self):
         self.visualizar_screen.refresh_geral() 
         self.stacked_widget.setCurrentWidget(self.visualizar_screen)
-        self.resize(self.visualizar_screen.sizeHint())
-        self._center()
+        '''self.resize(self.visualizar_screen.sizeHint())
+        self._center()'''
 
     def show_cadastro_para_criacao(self):
-        self.previous_screen = self.stacked_widget.currentWidget()
         self.cadastro_screen.abrir_para_criacao()
-        self.stacked_widget.setCurrentWidget(self.cadastro_screen)
-        self.resize(self.cadastro_screen.sizeHint())
-        self._center()
+        self._navigate_to(self.cadastro_screen)
+        ''''self.resize(self.cadastro_screen.sizeHint())
+        self._center()'''
 
     def show_cadastro_para_edicao(self, questao_id):
-        self.previous_screen = self.stacked_widget.currentWidget()
         self.cadastro_screen.abrir_para_edicao(questao_id)
-        self.stacked_widget.setCurrentWidget(self.cadastro_screen)
-        self.resize(self.cadastro_screen.sizeHint())
-        self._center()
+        self._navigate_to(self.cadastro_screen)
+        '''self.resize(self.cadastro_screen.sizeHint())
+        self._center()'''
 
     def show_gerador_por_id(self):
         self.gerador_id_screen._limpar_campos()
-        self.stacked_widget.setCurrentWidget(self.gerador_id_screen)
-        self.resize(self.gerador_id_screen.sizeHint())
-        self._center()
+        self._navigate_to(self.gerador_id_screen)
+        '''self.resize(self.gerador_id_screen.sizeHint())
+        self._center()'''
 
     def show_gerador_por_criterios(self):
         """Prepara e exibe a tela de geração por critérios."""
         self.gerador_criterios_screen._limpar_campos()
-        self.stacked_widget.setCurrentWidget(self.gerador_criterios_screen)
-        self.resize(self.gerador_criterios_screen.sizeHint())
-        self._center()
+        self._navigate_to(self.gerador_criterios_screen)
+        '''self.resize(self.gerador_criterios_screen.sizeHint())
+        self._center()'''
     
     def navigate_back(self):
-        # A lógica aqui está correta e chamará os métodos acima, que agora têm a correção.
-        if self.previous_screen:
-            # Reutiliza a lógica dos métodos show_... para garantir o resize correto
-            if self.previous_screen == self.main_menu:
-                self.show_main_menu()
-            elif self.previous_screen == self.visualizar_screen:
-                self.show_visualizar_questoes()
-            # Adicione outros casos 'elif' se necessário no futuro
-            else:
-                self.show_main_menu() # Fallback
-        else:
-            self.show_main_menu()
+        """
+        Volta para a tela anterior. Primeiro tenta a navegação interna da tela atual.
+        """
+        current_widget = self.stacked_widget.currentWidget()
 
-    # --- O resto dos seus métodos originais (sem alterações) ---
-    def _criar_menu_superior(self):
-        menu_bar = self.menuBar()
-        menu_dados = menu_bar.addMenu("&Dados") 
+        # Verifica se a tela atual tem um método para navegação interna
+        if hasattr(current_widget, 'navigate_back_internal'):
+            # Tenta executar a navegação interna e verifica se foi bem-sucedida
+            was_handled = current_widget.navigate_back_internal()
+            if was_handled:
+                return  # Se a tela filha resolveu, o trabalho da MainWindow termina aqui.
+
+        # Se a navegação interna não foi tratada (ou não existe),
+        # usa o histórico principal da MainWindow.
+        if self.navigation_history:
+            previous_widget = self.navigation_history.pop()
+            self.stacked_widget.setCurrentWidget(previous_widget)
+        else:
+            self.show_main_menu() # Fallback de segurança
+
+    def _navigate_to(self, target_widget):
+        """Função central para navegar, registrando o histórico antes de trocar de tela."""
+        current = self.stacked_widget.currentWidget()
+        # Adiciona ao histórico apenas se estivermos realmente mudando de tela
+        if current != target_widget:
+            self.navigation_history.append(current)
+        self.stacked_widget.setCurrentWidget(target_widget)
+
+    def _criar_barra_superior_unificada(self):
+        # 1. Crie a QToolBar, que será nossa única barra superior
+        self.top_bar = QToolBar("Barra Principal")
+        self.top_bar.setMovable(False)
+        self.top_bar.setObjectName("TopBar")
+
+        # 2. Altera o botão Voltar para ser um ícone (QToolButton)
+        self.btn_voltar_fixo = QToolButton()
+        self.btn_voltar_fixo.setText("←") # Ícone de seta para a esquerda
+        self.btn_voltar_fixo.setObjectName("VoltarToolButton")
+        self.btn_voltar_fixo.setToolTip("Voltar ao Menu") # Dica de ferramenta
+        self.btn_voltar_fixo.clicked.connect(self.navigate_back)
+        self.top_bar.addWidget(self.btn_voltar_fixo)
+        
+        # --- Menu Dados ---
+        menu_dados_btn = QToolButton()
+        menu_dados_btn.setText("Dados")
+        menu_dados_btn.setObjectName("MenuToolButton")
+        menu_dados = QMenu(self)
         action_exportar = QAction("Exportar Base de Dados", self)
-        action_exportar.triggered.connect(self._exportar_db) 
-        menu_dados.addAction(action_exportar)
+        action_exportar.triggered.connect(self._exportar_db)
         action_importar = QAction("Importar Base de Dados", self)
         action_importar.triggered.connect(self._importar_db)
+        menu_dados.addAction(action_exportar)
         menu_dados.addAction(action_importar)
-        menu_config = menu_bar.addMenu("&Configurações")
+        menu_dados_btn.setMenu(menu_dados)
+        menu_dados_btn.setPopupMode(QToolButton.InstantPopup)
+        self.top_bar.addWidget(menu_dados_btn)
+
+        # --- Menu Configurações ---
+        menu_config_btn = QToolButton()
+        menu_config_btn.setText("Configurações")
+        menu_config_btn.setObjectName("MenuToolButton")
+        menu_config = QMenu(self)
         action_identificacao = QAction("Identificação...", self)
         action_identificacao.triggered.connect(self.abrir_configuracoes)
         menu_config.addAction(action_identificacao)
-        menu_ajuda = menu_bar.addMenu("&Ajuda")
+        menu_config_btn.setMenu(menu_config)
+        menu_config_btn.setPopupMode(QToolButton.InstantPopup)
+        self.top_bar.addWidget(menu_config_btn)
+
+        # --- Menu Ajuda ---
+        menu_ajuda_btn = QToolButton()
+        menu_ajuda_btn.setText("Ajuda")
+        menu_ajuda_btn.setObjectName("MenuToolButton")
+        menu_ajuda = QMenu(self)
         action_sobre = QAction("Sobre...", self)
         action_sobre.triggered.connect(self._mostrar_janela_sobre)
         menu_ajuda.addAction(action_sobre)
+        menu_ajuda_btn.setMenu(menu_ajuda)
+        menu_ajuda_btn.setPopupMode(QToolButton.InstantPopup)
+        self.top_bar.addWidget(menu_ajuda_btn)
+
+        # 5. Adiciona a barra unificada à janela
+        self.addToolBar(self.top_bar)
 
     def abrir_gerador_prova(self):
         dialogo = SelecaoModoGeracaoDialog(self)
@@ -224,7 +313,10 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        texto_licenca = """<h3>Gerador de Provas Automático v1.0</h3><p>Copyright (c) 2025 Raphael Viana Cruz.</p><hr><p>Este software é licenciado sob a <b>Creative Commons Atribuição-NãoComercial-SemDerivações 4.0 Internacional (CC BY-NC-ND 4.0)</b>.</p><p><b>Você tem a liberdade de:</b></p><ul><li><b>Compartilhar</b> — copiar e redistribuir o material em qualquer suporte ou formato para fins não comerciais.</li></ul><p><b>Sob os seguintes termos:</b></p><ul><li><b>Atribuição</b> — Você deve dar o crédito apropriado ao autor original.</li><li><b>NãoComercial</b> — Você não pode usar o material para fins comerciais.</li><li><b>SemDerivações</b> — Se você modificar ou transformar o material, você não pode distribuir o material modificado.</li><li><b>Sem restrições adicionais</b> — Você não pode aplicar termos legais ou medidas de caráter tecnológico que restrinjam legalmente outros de fazerem algo que a licença permita.</li></ul><p>Qualquer uso para fins comerciais ou distribuição de versões modificadas requer autorização prévia e por escrito do autor.</p><p>Este é um resumo legível por humanos. Para ler a licença completa, acesse:</p><p><a href="http://creativecommons.org/licenses/by-nc-nd/4.0/">creativecommons.org/licenses/by-nc-nd/4.0</a></p><br><p><b>Contato:</b> raphael.cruz@gsuite.iff.edu.br</p>"""
+        texto_licenca = """<h3>Gerador de Provas Automático v1.0
+        </h3><p>Copyright (c) 2025 Raphael Viana Cruz.
+        </p><hr><p>Este software é licenciado sob a <b>Creative Commons Atribuição-NãoComercial-SemDerivações 4.0 Internacional (CC BY-NC-ND 4.0)</b>.
+        </p><p><b>Você tem a liberdade de:</b></p><ul><li><b>Compartilhar</b> — copiar e redistribuir o material em qualquer suporte ou formato para fins não comerciais.</li></ul><p><b>Sob os seguintes termos:</b></p><ul><li><b>Atribuição</b> — Você deve dar o crédito apropriado ao autor original.</li><li><b>NãoComercial</b> — Você não pode usar o material para fins comerciais.</li><li><b>SemDerivações</b> — Se você modificar ou transformar o material, você não pode distribuir o material modificado.</li><li><b>Sem restrições adicionais</b> — Você não pode aplicar termos legais ou medidas de caráter tecnológico que restrinjam legalmente outros de fazerem algo que a licença permita.</li></ul><p>Qualquer uso para fins comerciais ou distribuição de versões modificadas requer autorização prévia e por escrito do autor.</p><p>Este é um resumo legível por humanos. Para ler a licença completa, acesse:</p><p><a href="http://creativecommons.org/licenses/by-nc-nd/4.0/">creativecommons.org/licenses/by-nc-nd/4.0</a></p><br><p><b>Contato:</b> raphael.cruz@gsuite.iff.edu.br</p>"""
         label_texto = QLabel(texto_licenca)
         label_texto.setWordWrap(True)
         label_texto.setAlignment(Qt.AlignTop)
@@ -258,10 +350,29 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Erro Inesperado", f"Ocorreu um erro fatal:\n{e}")
 
     def _on_screen_changed(self, index):
-        """Chamado quando a tela do QStackedWidget muda."""
         current_widget = self.stacked_widget.widget(index)
         if current_widget:
-            # Pega o título da tela atual e define como o título da janela
             self.setWindowTitle(f"Gerador de Provas - {current_widget.windowTitle()}")
-            self.setFixedSize(current_widget.sizeHint())
+
+            # Controle do botão "Voltar"
+            is_main_menu = (current_widget == self.main_menu)
+            self.btn_voltar_fixo.setVisible(not is_main_menu)
+
+            # --- DIMENSIONAMENTO PRECISO E TRAVADO ---
+
+            # Ajusta tamanhos para obter valores reais
+            self.top_bar.adjustSize()
+            current_widget.adjustSize()
+
+            bar_width = self.top_bar.minimumSizeHint().width()
+            screen_hint = current_widget.sizeHint()
+
+            # Calcula a largura final com base na tela atual
+            final_width = max(screen_hint.width(), bar_width)
+
+            # Adiciona altura da barra ao total
+            total_height = screen_hint.height() + self.top_bar.height()
+
+            # Define o tamanho fixo e centraliza
+            self.setFixedSize(final_width, total_height)
             self._center()

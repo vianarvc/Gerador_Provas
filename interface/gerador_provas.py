@@ -150,13 +150,13 @@ class GeradorProvasScreen(QWidget):
 
         # --- Botões finais ---
         botoes_layout = QHBoxLayout()
-        self.btn_voltar = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
-        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)
+        '''self.btn_voltar = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
+        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)'''
         
         self.btn_gerar = MeuBotao("🚀 Gerar Prova", tipo="principal")
         self.btn_gerar.clicked.connect(self._gerar_prova)
         
-        botoes_layout.addWidget(self.btn_voltar)
+        #botoes_layout.addWidget(self.btn_voltar)
         botoes_layout.addStretch()
         botoes_layout.addWidget(self.btn_gerar)
         content_layout.addLayout(botoes_layout)

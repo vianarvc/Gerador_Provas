@@ -96,14 +96,14 @@ class VisualizarQuestoesScreen(QWidget):
         layout.addLayout(listas_layout)
 
         # --- MUDANÇA 2: Usa MeuBotao ---
-        self.btn_voltar_menu = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
+        '''self.btn_voltar_menu = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
         self.btn_voltar_menu.clicked.connect(self.back_to_main_menu_pressed.emit)
         
         # Adiciona o botão no canto inferior esquerdo
         botoes_layout = QHBoxLayout()
         botoes_layout.addWidget(self.btn_voltar_menu)
         botoes_layout.addStretch()
-        layout.addLayout(botoes_layout)
+        layout.addLayout(botoes_layout)'''
 
         # Conexões de sinais
         self.disciplina_combo.activated.connect(self._disciplina_selecionada)
@@ -132,9 +132,9 @@ class VisualizarQuestoesScreen(QWidget):
         botoes_inferiores_layout.addStretch()
 
         # --- MUDANÇA: Substitui QPushButton por MeuBotao ---
-        self.btn_voltar_lista = MeuBotao("↩️ Voltar para a Lista", tipo="voltar")
+        '''self.btn_voltar_lista = MeuBotao("↩️ Voltar para a Lista", tipo="voltar")
         self.btn_voltar_lista.clicked.connect(self._voltar_para_lista)
-        botoes_inferiores_layout.addWidget(self.btn_voltar_lista)
+        botoes_inferiores_layout.addWidget(self.btn_voltar_lista)'''
 
         self.btn_editar = MeuBotao("✏️ Editar Questão", tipo="editar")
         self.btn_editar.clicked.connect(self.abrir_edicao)
@@ -331,3 +331,19 @@ class VisualizarQuestoesScreen(QWidget):
                     salvar_ordem_temas(ordem_atual_temas, disciplina_id)
         except Exception as e:
             print(f"Erro ao salvar a ordem dos temas: {e}")
+
+    def navigate_back_internal(self):
+        """
+        Processa a ação de 'voltar' dentro desta tela.
+        Retorna True se a ação foi tratada, False caso contrário.
+        """
+        # Verifica se a tela de detalhes é a que está ativa no momento
+        if self.stacked_widget.currentWidget() == self.tela_detalhes:
+            # Se for, volta para a tela de listagem
+            self.stacked_widget.setCurrentWidget(self.tela_listagem)
+            # Retorna True para avisar a MainWindow que o "voltar" foi resolvido aqui
+            return True
+        
+        # Se já estivermos na tela de listagem, não há para onde voltar internamente.
+        # Retorna False para que a MainWindow possa assumir o controle.
+        return False

@@ -388,18 +388,18 @@ class CadastroQuestaoScreen(QWidget):
         self.formato_combo.currentIndexChanged.connect(self.atualizar_ui_formato)
 
         # --- MUDANÇA FINAL: Usa MeuBotao para os botões principais ---
-        self.btn_voltar = MeuBotao("↩️ Voltar/Cancelar", tipo="voltar")
+        #self.btn_voltar = MeuBotao("↩️ Voltar/Cancelar", tipo="voltar")
         self.btn_testar = MeuBotao("✔ Testar Código", tipo="testar")
         self.btn_salvar = MeuBotao("💾 Salvar Questão", tipo="principal")
 
         self.btn_salvar.clicked.connect(self.salvar_alterar_questao)
-        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)
+        #self.btn_voltar.clicked.connect(self.voltar_pressed.emit)
         self.btn_testar.clicked.connect(self._testar_codigo)
 
         botoes_layout = QGridLayout()
-        botoes_layout.addWidget(self.btn_voltar, 0, 0)
-        botoes_layout.addWidget(self.btn_testar, 0, 1)
-        botoes_layout.addWidget(self.btn_salvar, 0, 2)
+        #botoes_layout.addWidget(self.btn_voltar, 0, 0)
+        botoes_layout.addWidget(self.btn_testar, 0, 0)
+        botoes_layout.addWidget(self.btn_salvar, 0, 1)
         layout.addLayout(botoes_layout)
 
         self.disciplina_input.activated.connect(self._atualizar_lista_temas)

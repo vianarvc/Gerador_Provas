@@ -17,7 +17,10 @@ from database import (
 )
 # A importação do CadastroQuestaoWindow não é mais necessária aqui
 # from .cadastro_questao import CadastroQuestaoWindow
-from .custom_widgets import NoScrollComboBox
+from .custom_widgets import (
+    NoScrollComboBox, MeuBotao, MeuLineEdit, 
+    MeuComboBox, MeuGroupBox, MeuCheckBox, MeuLabel, EstilosApp
+)
 
 # --- MUDANÇA 2: Renomear a classe para "Screen" ---
 class VisualizarQuestoesScreen(QWidget):
@@ -47,65 +50,12 @@ class VisualizarQuestoesScreen(QWidget):
         self.stacked_widget.addWidget(self.tela_listagem)
         self.stacked_widget.addWidget(self.tela_detalhes)
 
-        self._aplicar_estilos()
         self._carregar_disciplinas()
-        
-        # A centralização agora é responsabilidade da MainWindow
-        # self._center()
 
     # --- MUDANÇA 5: Adicionar o método sizeHint ---
     def sizeHint(self):
         """Informa à MainWindow qual o tamanho ideal para esta tela."""
         return QSize(1100, 750)
-
-    def _aplicar_estilos(self):
-        # Seu código de estilos (QSS) continua exatamente o mesmo
-        style = """
-        /* GERAL */
-        QWidget { background-color: #f7f7f7; font-family: Arial; }
-        /* TÍTULOS */
-        #TituloSecundario { font-size: 16px; font-weight: bold; color: #2c3e50; padding: 5px 0; border-bottom: 1px solid #bdc3c7; }
-        /* PAINEL DE LISTAS (Temas e Questões) */
-        QListWidget { border: 1px solid #bdc3c7; border-radius: 5px; padding: 5px; background-color: white; outline: 0; }
-        QListWidget::item { padding: 5px; border-bottom: 1px solid #ecf0f1; }
-        QListWidget::item:selected { background-color: #3498db; color: white; }
-        /* COMBOBOX */
-        QComboBox { border: 1px solid #bdc3c7; border-radius: 5px; padding: 5px; background-color: white; }
-        /* SCROLL AREA DOS DETALHES */
-        #ScrollDetalhes { border: 1px solid #bdc3c7; border-radius: 5px; background-color: #ffffff; }
-        /* TEXT EDITORS (Enunciado/Parâmetros) */
-        QTextEdit { border: 1px solid #bdc3c7; border-radius: 4px; padding: 5px; background-color: #fdfdfd; }
-        /* BOTÕES DE AÇÃO (GERAL) */
-        QPushButton {
-            border: none; border-radius: 5px; padding: 8px 15px;
-            font-size: 16px; /* Reduzido para melhor encaixe */
-            font-weight: bold; min-height: 30px; margin-top: 5px;
-        }
-        /* BOTÃO PRIMÁRIO (Editar) */
-        #BotaoPrimario { background-color: #3498db; color: white; }
-        #BotaoPrimario:hover { background-color: #2980b9; }
-        /* BOTÃO DE EXCLUIR */
-        #BotaoExcluir { background-color: #e74c3c; color: white; }
-        #BotaoExcluir:hover { background-color: #c0392b; }
-        
-        
-        /* LABELS NO DETALHE */
-        QLabel { color: #2c3e50; padding-top: 5px; }
-
-        #BotaoVoltar {
-            background-color: #7f8c8d; /* Cinza */
-            color: white;
-            font-size: 22px;
-            font-weight: bold;
-            padding: 8px 15px;
-            border-radius: 5px;
-            border: none;
-            min-height: 30px;
-        }
-
-        #BotaoVoltar:hover { background-color: #95a5a6; }
-        """
-        self.setStyleSheet(style)
 
     def _criar_tela_listagem(self):
         widget = QWidget()
@@ -115,7 +65,8 @@ class VisualizarQuestoesScreen(QWidget):
         # Filtro de Disciplina
         filtro_layout = QHBoxLayout()
         label_disciplina = QLabel("<b>Disciplina:</b>")
-        self.disciplina_combo = NoScrollComboBox()
+        # --- MUDANÇA 1: Usa MeuComboBox ---
+        self.disciplina_combo = MeuComboBox()
         filtro_layout.addWidget(label_disciplina)
         filtro_layout.addWidget(self.disciplina_combo, 1)
         layout.addLayout(filtro_layout)
@@ -144,10 +95,10 @@ class VisualizarQuestoesScreen(QWidget):
         listas_layout.addWidget(painel_questoes, 3)
         layout.addLayout(listas_layout)
 
-        # --- MUDANÇA 6: Adicionar botão "Voltar ao Menu" ---
-        self.btn_voltar_menu = QPushButton("↩️ Voltar ao Menu Principal")
-        self.btn_voltar_menu.setObjectName("BotaoVoltar")
+        # --- MUDANÇA 2: Usa MeuBotao ---
+        self.btn_voltar_menu = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
         self.btn_voltar_menu.clicked.connect(self.back_to_main_menu_pressed.emit)
+        
         # Adiciona o botão no canto inferior esquerdo
         botoes_layout = QHBoxLayout()
         botoes_layout.addWidget(self.btn_voltar_menu)
@@ -180,18 +131,16 @@ class VisualizarQuestoesScreen(QWidget):
         botoes_inferiores_layout = QHBoxLayout()
         botoes_inferiores_layout.addStretch()
 
-        self.btn_voltar_lista = QPushButton("↩️ Voltar para a Lista")
-        self.btn_voltar_lista.setObjectName("BotaoVoltar")
+        # --- MUDANÇA: Substitui QPushButton por MeuBotao ---
+        self.btn_voltar_lista = MeuBotao("↩️ Voltar para a Lista", tipo="voltar")
         self.btn_voltar_lista.clicked.connect(self._voltar_para_lista)
         botoes_inferiores_layout.addWidget(self.btn_voltar_lista)
 
-        self.btn_editar = QPushButton("✏️ Editar Questão")
-        self.btn_editar.setObjectName("BotaoPrimario")
+        self.btn_editar = MeuBotao("✏️ Editar Questão", tipo="editar")
         self.btn_editar.clicked.connect(self.abrir_edicao)
         botoes_inferiores_layout.addWidget(self.btn_editar)
         
-        self.btn_excluir = QPushButton("❌ Excluir Questão")
-        self.btn_excluir.setObjectName("BotaoExcluir")
+        self.btn_excluir = MeuBotao("❌ Excluir Questão", tipo="excluir")
         self.btn_excluir.clicked.connect(self.confirmar_exclusao)
         botoes_inferiores_layout.addWidget(self.btn_excluir)
         

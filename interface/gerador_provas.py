@@ -4,7 +4,7 @@ import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
     QPushButton, QFileDialog, QScrollArea, QMessageBox, QCheckBox,
-    QGroupBox, QGridLayout, QDesktopWidget, QApplication
+    QGroupBox, QGridLayout, QDesktopWidget, QApplication, QSizePolicy
 )
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
@@ -14,7 +14,10 @@ from database import (
 )
 from motor_gerador import gerar_versoes_prova
 from gerador_pdf import criar_pdf_provas
-from .custom_widgets import NoScrollComboBox, NoScrollSpinBox, NoScrollDoubleSpinBox
+from .custom_widgets import (
+    MeuLineEdit, MeuSpinBox, MeuDoubleSpinBox, MeuComboBox, MeuLabel, MeuGroupBox, EstilosApp,
+    NoScrollComboBox, NoScrollSpinBox, MeuCheckBox, MeuBotao
+)
 from .log_dialog import LogDialog
 
 class GeradorProvasScreen(QWidget):
@@ -24,162 +27,148 @@ class GeradorProvasScreen(QWidget):
 
         self.setWindowTitle("Gerar Prova por Critérios")
 
-        self._aplicar_estilos() 
-        
-        # O layout principal da tela agora conterá apenas a área de rolagem
+        # Layout principal da tela
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10) # Margem para a janela toda
+        main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # 1. Criar a QScrollArea que conterá tudo
+        # Scroll principal
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setObjectName("ScrollPrincipal") # Para estilização, se necessário
+        scroll_area.setObjectName("ScrollPrincipal")
         main_layout.addWidget(scroll_area)
 
-        # 2. Criar um widget que servirá como "página" dentro da rolagem
-        scroll_content_widget = QWidget()
-        scroll_area.setWidget(scroll_content_widget)
-        
-        # 3. Criar o layout para esta "página". Todo o seu conteúdo vai aqui dentro.
-        content_layout = QVBoxLayout(scroll_content_widget)
+        # Conteúdo do scroll
+        scroll_content = QWidget()
+        scroll_area.setWidget(scroll_content)
+        content_layout = QVBoxLayout(scroll_content)
 
-        # O Título vai para o layout de conteúdo
+        # Título principal
         titulo_label = QLabel("Gerador Automático de Provas")
         titulo_label.setObjectName("TituloPrincipal")
         content_layout.addWidget(titulo_label)
 
-        # --- Bloco 1: Configurações da Avaliação (VERSÃO CORRIGIDA) ---
+        # --- Configurações da Avaliação ---
         config_group = QGroupBox("Configurações da Avaliação")
         config_layout = QVBoxLayout(config_group)
-        content_layout.addWidget(config_group) # Adicionado ao layout de conteúdo
+        content_layout.addWidget(config_group)
 
         config_layout.addWidget(QLabel("Nome da Avaliação:"))
-        self.nome_input = QLineEdit()
+        self.nome_input = MeuLineEdit()
         self.nome_input.setPlaceholderText("Ex: Eletricidade Básica - 1º Bimestre")
         config_layout.addWidget(self.nome_input)
 
         campos_capa_layout = QHBoxLayout()
         campos_capa_layout.addWidget(QLabel("Bimestre:"))
-        self.bimestre_input = QLineEdit("1") # Valor padrão "1"
+        self.bimestre_input = MeuLineEdit()
+        self.bimestre_input.setText("1")
         campos_capa_layout.addWidget(self.bimestre_input)
         campos_capa_layout.addSpacing(20)
         campos_capa_layout.addStretch()
         config_layout.addLayout(campos_capa_layout)
 
-        h_layout = QHBoxLayout()
-        h_layout.addWidget(QLabel("Número de Versões:"))
-        self.versoes_spinbox = NoScrollSpinBox()
+        h_layout_1 = QHBoxLayout()
+        h_layout_1.addWidget(QLabel("Número de Versões:"))
+        self.versoes_spinbox = MeuSpinBox()
         self.versoes_spinbox.setMinimum(1)
         self.versoes_spinbox.setValue(1)
         self.versoes_spinbox.setFixedWidth(150)
-        h_layout.addWidget(self.versoes_spinbox)
+        h_layout_1.addWidget(self.versoes_spinbox)
 
-        h_layout.addSpacing(20)
-        h_layout.addWidget(QLabel("Valor Total da Prova:"))
-        self.valor_total_spinbox = NoScrollDoubleSpinBox() 
+        self.check_embaralhar = MeuCheckBox("Embaralhar Ordem das Questões")
+        self.check_embaralhar.setChecked(False)
+        h_layout_1.addWidget(self.check_embaralhar)
+        h_layout_1.addStretch()
+        config_layout.addLayout(h_layout_1)
+
+        h_layout_2 = QHBoxLayout()
+        h_layout_2.addWidget(QLabel("Valor Total da Prova:"))
+        self.valor_total_spinbox = MeuDoubleSpinBox()
         self.valor_total_spinbox.setDecimals(2)
         self.valor_total_spinbox.setMinimum(0.0)
         self.valor_total_spinbox.setMaximum(1000.0)
         self.valor_total_spinbox.setValue(10.0)
-        h_layout.addWidget(self.valor_total_spinbox)
+        h_layout_2.addWidget(self.valor_total_spinbox)
 
-        h_layout.addSpacing(20)
-        self.check_distribuir_valor = QCheckBox("Distribuir valor igualmente") 
+        h_layout_2.addSpacing(20)
+        self.check_distribuir_valor = MeuCheckBox("Distribuir valor igualmente")
         self.check_distribuir_valor.setChecked(True)
-        h_layout.addWidget(self.check_distribuir_valor)
+        h_layout_2.addWidget(self.check_distribuir_valor)
+        h_layout_2.addStretch()
+        config_layout.addLayout(h_layout_2)
 
-        h_layout.addStretch()
-        config_layout.addLayout(h_layout)
-        
-        # --- MUDANÇA 2: Adiciona o seletor de Disciplina ---
+        # --- Seleção de Questões ---
         questoes_group = QGroupBox("Seleção de Questões")
         self.layout_questoes = QVBoxLayout(questoes_group)
-        
+        content_layout.addWidget(questoes_group)
+
         disciplina_layout = QHBoxLayout()
         disciplina_layout.addWidget(QLabel("<b>Selecione a Disciplina para a Prova:</b>"))
-        self.disciplina_combo = NoScrollComboBox()
+        self.disciplina_combo = MeuComboBox()
         disciplina_layout.addWidget(self.disciplina_combo, 1)
         self.layout_questoes.addLayout(disciplina_layout)
-        
-        content_layout.addWidget(questoes_group) # Adicionado ao layout de conteúdo
-        
+
+        # Scroll interno para linhas de tema
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setObjectName("ScrollCriterios")
+        scroll.setMinimumHeight(350)
+        #scroll.setMaximumHeight(700)
         scroll_content = QWidget()
         self.layout_scroll = QVBoxLayout(scroll_content)
         scroll.setWidget(scroll_content)
+
+        scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.layout_questoes.addWidget(scroll, 1)
 
-        self.btn_add_tema = QPushButton("➕ Adicionar Tema/Critério")
-        self.btn_add_tema.setObjectName("BotaoAcao")
+        # Botão adicionar tema
+        self.btn_add_tema = MeuBotao("➕ Adicionar Tema/Critério", tipo="acao")
         self.btn_add_tema.clicked.connect(self._add_linha_tema)
         self.layout_questoes.addWidget(self.btn_add_tema)
-        
-        self.linhas_tema = []
-        
-        # Carrega disciplinas e conecta o sinal ---
-        self._carregar_disciplinas()
-        self.disciplina_combo.activated.connect(self._disciplina_selecionada)
-        
-        # Inicia com a primeira linha de critério
-        self._add_linha_tema()
 
-        # --- Bloco 3: Opções de Geração (sem alteração) ---
+        self.linhas_tema = []
+
+        # --- Opções de Geração ---
         gabarito_group = QGroupBox("Opções de Geração e Gabarito")
-        gabarito_group.setObjectName("GabaritoGroup")
-        gabarito_main_layout = QVBoxLayout(gabarito_group)
+        gabarito_layout = QVBoxLayout(gabarito_group)
+        content_layout.addWidget(gabarito_group)
+
         checkboxes_layout = QHBoxLayout()
-        
-        self.check_distribuir = QCheckBox("Distribuir Gabarito (A, B, C...)")
+        self.check_distribuir = MeuCheckBox("Distribuir Gabarito (A, B, C...)")
         self.check_distribuir.setChecked(True)
-        self.check_embaralhar = QCheckBox("Embaralhar Ordem das Questões")
-        self.check_embaralhar.setChecked(False)
         checkboxes_layout.addWidget(self.check_distribuir)
-        checkboxes_layout.addWidget(self.check_embaralhar)
         checkboxes_layout.addStretch()
-        gabarito_main_layout.addLayout(checkboxes_layout)
-        
+        gabarito_layout.addLayout(checkboxes_layout)
+
         rotacao_layout = QHBoxLayout()
-        label_rotacao = QLabel("Rotação do Gabarito entre versões (n+):")
-        self.rotacao_spinbox = NoScrollSpinBox()
+        rotacao_layout.addWidget(QLabel("Rotação do Gabarito entre versões (n+):"))
+        self.rotacao_spinbox = MeuSpinBox()
         self.rotacao_spinbox.setMinimum(0)
         self.rotacao_spinbox.setValue(1)
-        rotacao_layout.addWidget(label_rotacao)
         rotacao_layout.addWidget(self.rotacao_spinbox)
         rotacao_layout.addStretch()
-        gabarito_main_layout.addLayout(rotacao_layout)
-        content_layout.addWidget(gabarito_group) # Adicionado ao layout de conteúdo
+        gabarito_layout.addLayout(rotacao_layout)
 
-
-        # --- Bloco 4: Botão Gerar (sem alteração) ---
-        '''self.btn_gerar = QPushButton("🚀 Gerar Prova")
-        self.btn_gerar.setObjectName("BotaoPrincipal")
-        self.btn_gerar.setMinimumHeight(60)
-        self.btn_gerar.clicked.connect(self._gerar_prova)
-        content_layout.addWidget(self.btn_gerar, 0, Qt.AlignCenter)'''
-
-        botoes_finais_layout = QHBoxLayout()
-        self.btn_voltar = QPushButton("↩️ Voltar ao Menu")
-        self.btn_voltar.setObjectName("BotaoVoltar") # Usa o estilo cinza
-        # A conexão será feita no próximo passo
+        # --- Botões finais ---
+        botoes_layout = QHBoxLayout()
+        self.btn_voltar = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
         self.btn_voltar.clicked.connect(self.voltar_pressed.emit)
         
-        self.btn_gerar = QPushButton("🚀 Gerar Prova")
-        self.btn_gerar.setObjectName("BotaoPrincipal")
-        self.btn_gerar.setMinimumHeight(60)
+        self.btn_gerar = MeuBotao("🚀 Gerar Prova", tipo="principal")
         self.btn_gerar.clicked.connect(self._gerar_prova)
-
-        botoes_finais_layout.addWidget(self.btn_voltar)
-        botoes_finais_layout.addStretch()
-        botoes_finais_layout.addWidget(self.btn_gerar)
-        content_layout.addLayout(botoes_finais_layout)
         
-        #self._center()
+        botoes_layout.addWidget(self.btn_voltar)
+        botoes_layout.addStretch()
+        botoes_layout.addWidget(self.btn_gerar)
+        content_layout.addLayout(botoes_layout)
 
+        # Inicializa com a primeira linha de tema
+        self._carregar_disciplinas()
+        self.disciplina_combo.activated.connect(self._disciplina_selecionada)
+        self._add_linha_tema()
+    
     def sizeHint(self):
         """Informa à MainWindow qual o tamanho ideal para esta tela."""
-        return QSize(1100, 900)
+        return QSize(1100, 850)
     
     def _limpar_campos(self):
         """Limpa todos os campos e reseta a tela para o estado inicial."""
@@ -238,7 +227,8 @@ class GeradorProvasScreen(QWidget):
 
     # --- _add_linha_tema` agora usa temas filtrados ---
     def _add_linha_tema(self):
-        tema_group = QGroupBox("Critério por Tema")
+        tema_group = MeuGroupBox("Critério por Tema")
+        #tema_group.setMinimumHeight(400)
         tema_layout = QVBoxLayout(tema_group)
         
         header_layout = QHBoxLayout()
@@ -251,7 +241,7 @@ class GeradorProvasScreen(QWidget):
             temas_filtrados = obter_temas(disciplina_id=disciplina_id)
             combo_tema.addItems(temas_filtrados)
         
-        btn_remover = QPushButton("➖")
+        btn_remover = MeuBotao("➖", tipo="remover")
         btn_remover.setFixedWidth(40)
         btn_remover.clicked.connect(lambda: self._remover_linha_tema(tema_group))
         
@@ -427,133 +417,6 @@ class GeradorProvasScreen(QWidget):
         finally:
             self.btn_gerar.setEnabled(True)
 
-    def _aplicar_estilos(self):
-        """Define e aplica o Qt Style Sheet (QSS) para a janela de geração."""
-        style = """
-        /* GERAL */
-        QWidget {
-            background-color: #f7f7f7;
-            font-family: Arial;
-        }
-
-        /* TÍTULO PRINCIPAL */
-        #TituloPrincipal {
-            font-size: 24px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 2px solid #3498db;
-        }
-        
-        /* GROUP BOXES (Seções) */
-        QGroupBox {
-            font-weight: bold;
-            color: #34495e; 
-            margin-top: 10px;
-            padding-top: 20px;
-            border: 1px solid #bdc3c7;
-            border-radius: 5px;
-        }
-
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            padding: 0 10px;
-            background-color: #ecf0f1; 
-            border-radius: 3px;
-        }
-
-        /* CAMPOS DE INPUT E COMBOBOX */
-        QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-            border: 1px solid #bdc3c7;
-            border-radius: 5px;
-            padding: 5px;
-            background-color: white;
-            selection-background-color: #3498db;
-        }
-        
-        QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-            border: 1px solid #3498db;
-        }
-
-        /* LABEL DE CONTADOR */
-        QLabel {
-             color: #2c3e50;
-        }
-        QLabel[style*="gray"] { /* Label de contagem de questões */
-            font-size: 11px;
-            color: #7f8c8d;
-        }
-        
-        /* SCROLL AREA DOS CRITÉRIOS */
-        #ScrollCriterios {
-             border: 1px solid #bdc3c7;
-             border-radius: 5px;
-             background-color: #ecf0f1;
-        }
-        
-        /* BOTÃO VOLTAR  */
-        #BotaoVoltar {
-            background-color: #7f8c8d; /* Cinza */
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 30px;
-            font-weight: bold;
-            margin-top: 15px;
-            min-width: 300px
-        }
-        #BotaoVoltar:hover {
-            background-color: #95a5a6;
-        }
-
-        /* BOTÃO PRINCIPAL (Gerar Prova) */
-        #BotaoPrincipal {
-            background-color: #2ecc71; /* Verde */
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 30px;
-            font-weight: bold;
-            margin-top: 15px;
-            min-width: 300px
-        }
-        #BotaoPrincipal:hover {
-            background-color: #27ae60;
-        }
-        
-        /* BOTÃO DE AÇÃO (Adicionar/Remover Tema) */
-        #BotaoAcao {
-            background-color: #3498db; /* Azul */
-            color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 5px 10px;
-            font-size: 18px;
-            min-height: 25px;
-            min-width: 200px
-        }
-        #BotaoAcao:hover {
-            background-color: #2980b9;
-        }
-        
-        QPushButton[text^="➖"] { /* Botão remover */
-            background-color: #e74c3c; /* Vermelho */
-        }
-        QPushButton[text^="➖"]:hover {
-            background-color: #c0392b;
-        }
-        """
-        self.setStyleSheet(style)
-
-    '''def _center(self): 
-        """ Centraliza a janela na tela. """
-        qr = self.frameGeometry()
-        cp = QDesktopWidget().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())'''
-
     def _remover_linha_tema(self, linha_widget):
         if len(self.linhas_tema) <= 1:
             QMessageBox.warning(self, "Aviso", "Pelo menos um critério de tema é necessário.")
@@ -569,8 +432,3 @@ class GeradorProvasScreen(QWidget):
         """Dispara a atualização de contagem para todas as linhas de critério."""
         for linha in self.linhas_tema:
             self._atualizar_contadores_linha(linha)
-
-    '''def showEvent(self, event):
-        """Este método é chamado automaticamente pelo Qt antes de a janela ser exibida."""
-        self._center()
-        super().showEvent(event)'''

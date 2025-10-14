@@ -1,10 +1,12 @@
 # interface/configuracoes_dialog.py
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QFormLayout, QLineEdit, 
-    QPushButton, QDialogButtonBox, QMessageBox
+    QDialog, QVBoxLayout, QFormLayout, 
+    QDialogButtonBox, QMessageBox, QPushButton
 )
 from database import salvar_configuracoes, carregar_configuracoes
+# --- MUDANÇA 1: Importa os widgets customizados ---
+from .custom_widgets import MeuLineEdit, EstilosApp
 
 class ConfiguracoesDialog(QDialog):
     def __init__(self, parent=None):
@@ -15,12 +17,13 @@ class ConfiguracoesDialog(QDialog):
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
 
+        # --- MUDANÇA 2: Usa MeuLineEdit para os campos de entrada ---
         self.campos = {
-            "sigla_curso": QLineEdit(),
-            "nome_curso": QLineEdit(),
-            "nome_professor": QLineEdit(),
-            "nome_escola": QLineEdit(),
-            "email_contato": QLineEdit()
+            "sigla_curso": MeuLineEdit(),
+            "nome_curso": MeuLineEdit(),
+            "nome_professor": MeuLineEdit(),
+            "nome_escola": MeuLineEdit(),
+            "email_contato": MeuLineEdit()
         }
 
         form_layout.addRow("Sigla do Curso (Ex: CCTECC):", self.campos["sigla_curso"])
@@ -33,8 +36,18 @@ class ConfiguracoesDialog(QDialog):
 
         # Botões Salvar e Cancelar
         button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept) # Conecta ao salvamento
+        button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        
+        # --- MUDANÇA 3: Aplica o estilo customizado aos botões do QDialogButtonBox ---
+        save_button = button_box.button(QDialogButtonBox.Save)
+        save_button.setText("Salvar") # Opcional: muda o texto padrão
+        EstilosApp.aplicar(save_button, estilo="verde", font_size=20, min_height=30, min_width=100)
+
+        cancel_button = button_box.button(QDialogButtonBox.Cancel)
+        cancel_button.setText("Cancelar") # Opcional: muda o texto padrão
+        EstilosApp.aplicar(cancel_button, estilo="cinza", font_size=20, min_height=30, min_width=100)
+
         layout.addWidget(button_box)
 
         self.carregar_dados()

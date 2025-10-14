@@ -12,17 +12,17 @@ from PyQt5.QtGui import QFont, QPixmap, QSyntaxHighlighter, QTextCharFormat, QCo
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from database import salvar_questao, obter_questao_por_id, atualizar_questao, obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, salvar_disciplina, obter_disciplina_nome_por_id
 import gerenciador_imagens
-from .custom_widgets import NoScrollComboBox, NoScrollSlider
+from .custom_widgets import (
+    MeuBotao, MeuLineEdit, MeuComboBox, MeuGroupBox, MeuLabel, 
+    MeuTableWidget, MeuToolButton, MeuCheckBox, MeuTextEdit, 
+    MeuSpinBox, NoScrollSlider, NoScrollComboBox, MeuImagemPreviewLabel
+)
 import random
 import io
 import sys
 from contextlib import redirect_stdout
 import motor_gerador
 from constants import UNIDADES_PARA_DROPDOWN
-
-#UNIDADES_COMUNS = ["", "e", "C", "N/C", "S", "V", "A", "Ω", "W", "kWh", "F", "H", "Hz", "s", "m", "g", "kg", "N", "J"]
-UNIDADES_COMUNS = UNIDADES_PARA_DROPDOWN
-
 
 class PythonHighlighter(QSyntaxHighlighter):
     """Classe para realçar a sintaxe Python dentro do QTextEdit."""
@@ -62,33 +62,31 @@ class CadastroQuestaoScreen(QWidget):
     cadastro_concluido = pyqtSignal()  # Sinal para avisar que salvou/atualizou
     voltar_pressed = pyqtSignal() # Sinal para avisar que quer cancelar/voltar
     questao_atualizada = pyqtSignal()
-    
+
     def __init__(self, questao_id=None):
         super().__init__()
         self.questao_id = questao_id
         self.imagem_path = ""
-        self.alternativas_inputs = {} # Corrigido o erro anterior
+        self.alternativas_inputs = {}
         self.simbolos_latex = {
-            '-- Símbolos --': '',
+            '-- Símbolos --': 
+            '', 
             'Ω (Ohm)': 'Ω',
-            'µ (micro)': 'µ',
-            'ρ (rho)': 'ρ',
-            'ε (epsilon)': 'ε',
+            'ω (frequência angular)': 'ω',
+            'µ (micro)': 'µ', 
+            'ρ (rho)': 'ρ', 
+            'ε (epsilon)': 'ε', 
             'η (eta)': 'η',
-            'Δ (delta)': 'Δ',
-            'α (alfa)': 'α',
-            'β (beta)': 'β',
+            'Δ (delta)': 'Δ', 
+            'α (alfa)': 'α', 
+            'β (beta)': 'β', 
             'θ (theta)': 'θ',
-            'π (pi)': 'π',
-            '° (graus)': '°', # Alterado para o caractere direto
-            '± (mais/menos)': '±', # Alterado para o caractere direto
-            '√ (raiz)': '√', # Alterado para o caractere direto
-            # Comandos que precisam de argumento devem ser mantidos como LaTeX
-            'v (vetor)': '$\\vec{{}}$' 
+            'π (pi)': 'π', 
+            '° (graus)': '°', 
+            '± (mais/menos)': '±', 
+            '√ (raiz)': '√',
+            'v (vetor)': '$\\vec{{}}$'
         }
-        #self.setWindowTitle("Cadastro de Questão")
-        #self.resize(950, 800)
-        self._aplicar_estilos() 
 
         layout_principal = QVBoxLayout(self)
         scroll = QScrollArea(self)
@@ -96,125 +94,114 @@ class CadastroQuestaoScreen(QWidget):
         content = QWidget()
         scroll.setWidget(content)
         
-        # Adiciona margens internas à área de conteúdo
         layout = QVBoxLayout(content)
         layout.setContentsMargins(20, 20, 20, 20)
         layout_principal.addWidget(scroll)
 
-        # Configura o Título Principal
-        self.titulo_label = QLabel("Cadastro de Questão")
-        self.titulo_label.setObjectName("TituloPrincipal") 
+        self.titulo_label = MeuLabel("Cadastro de Questão")
+        #self.titulo_label.setObjectName("TituloPrincipal")
         layout.addWidget(self.titulo_label)
         
         config_layout = QHBoxLayout()
-        self.check_ativa = QCheckBox("Questão Ativa (incluir no sorteio de provas)")
+        # --- MUDANÇA: Usa MeuCheckBox ---
+        self.check_ativa = MeuCheckBox("Questão Ativa (incluir no sorteio de provas)")
         self.check_ativa.setChecked(True)
         config_layout.addWidget(self.check_ativa)
         config_layout.addStretch()
         layout.addLayout(config_layout)
         
-        # Estrutura de Campos (Formato, Tema, Dificuldade, Grupo) em duas colunas
         campos_layout = QHBoxLayout()
         
-        # Coluna Esquerda
         col_esq = QVBoxLayout()
         col_esq.addWidget(QLabel("Formato da Questão:"))
-        self.formato_combo = NoScrollComboBox()
+        # --- MUDANÇA: Usa MeuComboBox ---
+        self.formato_combo = MeuComboBox()
         self.formato_combo.addItems(["Múltipla Escolha", "Verdadeiro ou Falso", "Discursiva"])
         col_esq.addWidget(self.formato_combo)
-       
-        # AJUSTE 1: Checkbox Teórica fica abaixo do Formato
-        self.check_teorica = QCheckBox("Múltipla Escolha Teórica (alternativas fixas)")
+        
+        # --- MUDANÇA: Usa MeuCheckBox ---
+        self.check_teorica = MeuCheckBox("Múltipla Escolha Teórica (alternativas fixas)")
         self.check_teorica.toggled.connect(self.atualizar_ui_formato)
         col_esq.addWidget(self.check_teorica)
-        col_esq.addSpacing(10) # Espaçamento após a checkbox
+        col_esq.addSpacing(10)
         
-        # CAMPO DISCIPLINA (Utilizando self.tema_input, conforme solicitado)
         col_esq.addWidget(QLabel("Disciplina:"))
-        # ATENÇÃO: self.tema_input será redefinido logo abaixo na col_dir
-        self.disciplina_input = NoScrollComboBox() 
+        # --- MUDANÇA: Usa MeuComboBox ---
+        self.disciplina_input = MeuComboBox()
         self.disciplina_input.setEditable(True)
-        self.disciplina_input.addItems(obter_disciplinas()) # Presumindo 'obter_disciplinas'
+        self.disciplina_input.addItems(obter_disciplinas())
         self.disciplina_input.lineEdit().setPlaceholderText("Selecione ou digite uma nova disciplina")
-        #self.disciplina_input.activated.connect(self._atualizar_lista_temas)
         col_esq.addWidget(self.disciplina_input)
-        col_esq.addStretch(1) # Preenche o espaço
+        col_esq.addStretch(1)
         
-        # Coluna Direita
         col_dir = QVBoxLayout()
         col_dir.addWidget(QLabel("Dificuldade:"))
-        self.dificuldade_combo = NoScrollComboBox()
+        # --- MUDANÇA: Usa MeuComboBox ---
+        self.dificuldade_combo = MeuComboBox()
         self.dificuldade_combo.addItems(["Fácil", "Média", "Difícil"])
         col_dir.addWidget(self.dificuldade_combo)
         col_dir.addSpacing(20)
         col_dir.addStretch(1)
 
-        # CAMPO TEMA (Redefinindo self.tema_input, alinhado com o campo Disciplina acima)
         col_dir.addWidget(QLabel("Tema:"))
-        self.tema_input = NoScrollComboBox() # SOBRESCRITA: esta é a instância final de self.tema_input
+        # --- MUDANÇA: Usa MeuComboBox ---
+        self.tema_input = MeuComboBox()
         self.tema_input.setEditable(True)
-        #self.tema_input.addItems(obter_temas())
         self.tema_input.setInsertPolicy(QComboBox.NoInsert)
         self.tema_input.lineEdit().setPlaceholderText("Selecione ou digite um novo tema")
         col_dir.addWidget(self.tema_input)
 
-        # Campo Grupo (Movido para logo abaixo do Tema)
         self.grupo_label = QLabel("Grupo (opcional):")
-        self.grupo_input = QLineEdit()
+        # --- MUDANÇA: Usa MeuLineEdit ---
+        self.grupo_input = MeuLineEdit()
         self.grupo_input.setPlaceholderText("Ex: CONCEITO-LEI-OHM")
         col_dir.addWidget(self.grupo_label)
         col_dir.addWidget(self.grupo_input)
         
-        #Campo Principal
         campos_layout.addLayout(col_esq)
         campos_layout.addSpacing(30)
         campos_layout.addLayout(col_dir)
         layout.addLayout(campos_layout)
-        layout.addSpacing(15) # Espaçamento para separar do bloco de cima
+        layout.addSpacing(15)
         layout.addWidget(QLabel("Fonte da Questão (opcional):"))
-        self.fonte_input = QLineEdit()
+        # --- MUDANÇA: Usa MeuLineEdit ---
+        self.fonte_input = MeuLineEdit()
         self.fonte_input.setPlaceholderText("Ex: Livro X, Ed. Y, p. 123")
         layout.addWidget(self.fonte_input)
         
         layout.addWidget(QLabel("Enunciado da Questão (Comandos LaTeX):"))
 
-        # Toolbar do Enunciado
         toolbar_enunciado = QHBoxLayout()
         btn_bold = self._criar_botao_formatacao("B", self.aplicar_latex_bold, "Negrito (\\textbf{})")
         btn_italic = self._criar_botao_formatacao("I", self.aplicar_latex_italic, "Itálico (\\textit{})")
         btn_underline = self._criar_botao_formatacao("U", self.aplicar_latex_underline, "Sublinhado (\\underline{})")
         btn_superscript = self._criar_botao_formatacao("x²", self.aplicar_latex_superscript, "Sobrescrito ($^{})")
         btn_subscript = self._criar_botao_formatacao("x₂", self.aplicar_latex_subscript, "Subscrito ($_{})")
-
-        toolbar_enunciado.addWidget(btn_bold)
-        toolbar_enunciado.addWidget(btn_italic)
-        toolbar_enunciado.addWidget(btn_underline)
-        toolbar_enunciado.addSpacing(10)
-        toolbar_enunciado.addWidget(btn_superscript)
-        toolbar_enunciado.addWidget(btn_subscript)
-        
+        toolbar_enunciado.addWidget(btn_bold); toolbar_enunciado.addWidget(btn_italic); toolbar_enunciado.addWidget(btn_underline)
+        toolbar_enunciado.addSpacing(10); toolbar_enunciado.addWidget(btn_superscript); toolbar_enunciado.addWidget(btn_subscript)
         toolbar_enunciado.addSpacing(20)
-        self.simbolo_combo = NoScrollComboBox()
+        
+        # --- MUDANÇA: Usa MeuComboBox ---
+        self.simbolo_combo = MeuComboBox()
         self.simbolo_combo.addItems(self.simbolos_latex.keys())
         self.simbolo_combo.activated[str].connect(self._inserir_simbolo)
         toolbar_enunciado.addWidget(self.simbolo_combo)
-
         toolbar_enunciado.addStretch()
         layout.addLayout(toolbar_enunciado)
 
-        # AJUSTE 2: Altura maior para o Enunciado
-        self.enunciado_input = QTextEdit()
+        # --- MUDANÇA: Usa MeuTextEdit ---
+        self.enunciado_input = MeuTextEdit()
         self.enunciado_input.setPlaceholderText("Use {variavel} para inserir valores...")
         self.enunciado_input.setFixedHeight(180) 
         layout.addWidget(self.enunciado_input)
 
-        # Grupo Imagem
-        group_imagem = QGroupBox("Imagem da Questão")
+        # --- MUDANÇA: Usa MeuGroupBox e MeuBotao ---
+        group_imagem = MeuGroupBox("Imagem da Questão")
         layout_imagem = QVBoxLayout(group_imagem)
         botoes_imagem_layout = QHBoxLayout()
-        btn_inserir_imagem = QPushButton("📎 Inserir do Arquivo")
-        btn_colar_imagem = QPushButton("📋 Colar Imagem")
-        btn_remover_imagem = QPushButton("❌ Remover Imagem")
+        btn_inserir_imagem = MeuBotao("📎 Inserir do Arquivo", tipo="acao")
+        btn_colar_imagem = MeuBotao("📋 Colar Imagem", tipo="acao")
+        btn_remover_imagem = MeuBotao("❌ Remover Imagem", tipo="remover")
         
         btn_inserir_imagem.clicked.connect(self._inserir_imagem_arquivo)
         btn_colar_imagem.clicked.connect(self._colar_imagem_clipboard)
@@ -224,298 +211,203 @@ class CadastroQuestaoScreen(QWidget):
         botoes_imagem_layout.addWidget(btn_remover_imagem)
         layout_imagem.addLayout(botoes_imagem_layout)
 
-        self.imagem_preview_label = QLabel("Nenhuma imagem selecionada.")
-        self.imagem_preview_label.setAlignment(Qt.AlignCenter)
-        self.imagem_preview_label.setMinimumHeight(200)
-        self.imagem_preview_label.setObjectName("ImagemPreview") 
+        self.imagem_preview_label = MeuImagemPreviewLabel("Nenhuma imagem selecionada.")
         layout_imagem.addWidget(self.imagem_preview_label)
 
         slider_layout = QHBoxLayout()
         self.largura_label = QLabel("Largura na Prova: 40%")
         self.largura_slider = NoScrollSlider(Qt.Horizontal)
-        self.largura_slider.setRange(10, 100)
-        self.largura_slider.setValue(40)
+        self.largura_slider.setRange(10, 100); self.largura_slider.setValue(40)
         self.largura_slider.valueChanged.connect(lambda v: self.largura_label.setText(f"Largura na Prova: {v}%"))
         slider_layout.addWidget(self.largura_label)
         slider_layout.addWidget(self.largura_slider)
         layout_imagem.addLayout(slider_layout)
         layout.addWidget(group_imagem)
 
-        # Grupo Variáveis
-        self.group_variaveis = QGroupBox("Geração de Variáveis e Resposta Numérica")
+        # --- MUDANÇA: Usa MeuGroupBox e widgets customizados ---
+        self.group_variaveis = MeuGroupBox("Geração de Variáveis e Resposta Numérica")
         layout_vars = QVBoxLayout(self.group_variaveis)
-        # AJUSTE 3: Padding menor para o QGroupBox de Variáveis via QSS, mas mantendo o layout
-        layout_vars.setContentsMargins(10, 10, 10, 10) # Reduz o padding interno do layout
-        layout_vars.setSpacing(0)
+        layout_vars.setContentsMargins(10, 10, 10, 10); layout_vars.setSpacing(0)
         
-        # Combobox Tipo Geração
         tipo_layout = QHBoxLayout()
         tipo_layout.addWidget(QLabel("Tipo de Geração de Variáveis:"))
-        self.tipo_combo = NoScrollComboBox()
+        self.tipo_combo = MeuComboBox()
         self.tipo_combo.addItems(["Código (Python)", "Tabela (Visual)"])
-        tipo_layout.addWidget(self.tipo_combo)
-        tipo_layout.addStretch()
+        tipo_layout.addWidget(self.tipo_combo); tipo_layout.addStretch()
         layout_vars.addLayout(tipo_layout)
 
         self.stacked_widget = QStackedWidget()
         layout_vars.addWidget(self.stacked_widget)
         self.tipo_combo.currentIndexChanged.connect(self.stacked_widget.setCurrentIndex)
 
-        # Widget Código (Python)
         widget_codigo = QWidget()
         layout_codigo = QVBoxLayout(widget_codigo)
         snippet_layout = QHBoxLayout()
         snippet_layout.addWidget(QLabel("<b>Inserir Snippet:</b>"))
-
-        self.snippet_combo = NoScrollComboBox()
-        self.snippet_combo.addItems([
-            "-- Selecione --", 
-            #"Sortear Inteiro (randint)", 
-            #"Sortear Decimal (uniform)", 
-            "Sortear de Lista (choice)", 
-            "Definir Resposta (Simples)",
-            "Definir Resposta Múltipla (Auto)"
-        ]) 
+        self.snippet_combo = MeuComboBox()
+        self.snippet_combo.addItems(["-- Selecione --", "Sortear de Lista (choice)", "Definir Resposta (Simples)", "Definir Resposta Múltipla (Auto)"]) 
         self.snippet_combo.activated[str].connect(self._inserir_snippet)
-
-        snippet_layout.addWidget(self.snippet_combo)
-        snippet_layout.addStretch()
+        snippet_layout.addWidget(self.snippet_combo); snippet_layout.addStretch()
         layout_codigo.addLayout(snippet_layout)
-
-        self.parametros_input = QTextEdit()
+        
+        self.parametros_input = MeuTextEdit()
         self.parametros_input.setFont(QFont("Courier", 12))
         self.parametros_input.setPlaceholderText("# Defina suas variáveis...")
-        #self.parametros_input.setFixedHeight(150)
-        self.parametros_input.setMinimumHeight(100) # Define uma altura mínima menor, mas não fixa
+        self.parametros_input.setMinimumHeight(100)
         layout_codigo.addWidget(self.parametros_input)
-
         self.highlighter = PythonHighlighter(self.parametros_input.document())
         layout_codigo.addStretch() 
         self.stacked_widget.addWidget(widget_codigo)
 
-        # Widget Tabela (Visual)
         widget_tabela = QWidget()
         layout_tabela = QVBoxLayout(widget_tabela)
         layout_tabela.addWidget(QLabel("<b>Tabela de Variáveis:</b>"))
-        self.tabela_vars = QTableWidget()
-        self.tabela_vars.setColumnCount(3)
-        self.tabela_vars.setHorizontalHeaderLabels(["Nome", "Tipo", "Valores"])
+        self.tabela_vars = MeuTableWidget()
+        self.tabela_vars.setColumnCount(3); self.tabela_vars.setHorizontalHeaderLabels(["Nome", "Tipo", "Valores"])
         self.tabela_vars.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabela_vars.setMinimumHeight(150)
         layout_tabela.addWidget(self.tabela_vars)
 
         botoes_tabela_layout = QHBoxLayout()
-        btn_add_var = QPushButton("➕ Adicionar")
-        btn_rem_var = QPushButton("➖ Remover")
-        
-        #btn_add_var.setObjectName("BotaoAcao")
-        #btn_rem_var.setObjectName("BotaoAcao")
-        
+        btn_add_var = MeuBotao("➕ Adicionar", tipo="acao")
+        btn_rem_var = MeuBotao("➖ Remover", tipo="remover")
         btn_add_var.clicked.connect(self._adicionar_linha_tabela)
         btn_rem_var.clicked.connect(self._remover_linha_tabela)
-        botoes_tabela_layout.addWidget(btn_add_var)
-        botoes_tabela_layout.addWidget(btn_rem_var)
-        botoes_tabela_layout.addStretch()
+        botoes_tabela_layout.addWidget(btn_add_var); botoes_tabela_layout.addWidget(btn_rem_var); botoes_tabela_layout.addStretch()
         layout_tabela.addLayout(botoes_tabela_layout)
 
-       # Criamos o label e o guardamos em uma variável 'self'
         self.label_formula_resposta = QLabel("<b>Fórmula da Resposta (em Python):</b>")
-        # Adicionamos um nome de objeto para podermos encontrá-lo depois
         self.label_formula_resposta.setObjectName("label_formula_resposta") 
         layout_tabela.addWidget(self.label_formula_resposta)
-
-        self.formula_resposta_input = QLineEdit()
+        self.formula_resposta_input = MeuLineEdit()
         self.formula_resposta_input.setPlaceholderText("Use os Nomes das Variáveis. Ex: V / R")
         layout_tabela.addWidget(self.formula_resposta_input)
 
-        # --- INÍCIO DA SEÇÃO MODO 1 ---
-        # Checkbox para ativar o modo de Múltiplas Respostas (MODO 1)
-        self.check_tabela_modo1 = QCheckBox("Gerar Resposta Múltipla")
+        self.check_tabela_modo1 = MeuCheckBox("Gerar Resposta Múltipla")
         layout_tabela.addWidget(self.check_tabela_modo1)
-
-        # Grupo que contém todos os widgets específicos do MODO 1
-        self.group_modo1 = QGroupBox("Variáveis de Saída e Formatação")
-        layout_modo1 = QVBoxLayout(self.group_modo1)
         
-        # Tabela para as Variáveis de Saída (cálculos)
+        self.group_modo1 = MeuGroupBox("Variáveis de Saída e Formatação")
+        layout_modo1 = QVBoxLayout(self.group_modo1)
         layout_modo1.addWidget(QLabel("<b>Tabela de Variáveis de Saída (Cálculos):</b>"))
-        self.tabela_saidas = QTableWidget()
-        self.tabela_saidas.setColumnCount(2)
-        self.tabela_saidas.setHorizontalHeaderLabels(["Nome da Saída", "Fórmula de Cálculo"])
+        self.tabela_saidas = MeuTableWidget()
+        self.tabela_saidas.setColumnCount(2); self.tabela_saidas.setHorizontalHeaderLabels(["Nome da Saída", "Fórmula de Cálculo"])
         self.tabela_saidas.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabela_saidas.setMinimumHeight(100)
         layout_modo1.addWidget(self.tabela_saidas)
-
+        
         botoes_saida_layout = QHBoxLayout()
-        btn_add_saida = QPushButton("➕ Adicionar Saída")
-        btn_rem_saida = QPushButton("➖ Remover Saída")
+        btn_add_saida = MeuBotao("➕ Adicionar Saída", tipo="acao")
+        btn_rem_saida = MeuBotao("➖ Remover Saída", tipo="remover")
         btn_add_saida.clicked.connect(lambda: self.tabela_saidas.insertRow(self.tabela_saidas.rowCount()))
         btn_rem_saida.clicked.connect(lambda: self.tabela_saidas.removeRow(self.tabela_saidas.currentRow()))
-        botoes_saida_layout.addWidget(btn_add_saida)
-        botoes_saida_layout.addWidget(btn_rem_saida)
-        botoes_saida_layout.addStretch()
+        botoes_saida_layout.addWidget(btn_add_saida); botoes_saida_layout.addWidget(btn_rem_saida); botoes_saida_layout.addStretch()
         layout_modo1.addLayout(botoes_saida_layout)
 
-        # Campo para o Formato da Alternativa
         formato_layout = QHBoxLayout()
         formato_layout.addWidget(QLabel("<b>Formato da Alternativa:</b>"))
-        self.formato_texto_input = QLineEdit()
+        self.formato_texto_input = MeuLineEdit()
         self.formato_texto_input.setPlaceholderText("Ex: I1={I1}A; I2={I2}A")
         formato_layout.addWidget(self.formato_texto_input)
-
-        self.btn_gerar_sugestao = QPushButton("Gerar Sugestão")
+        self.btn_gerar_sugestao = MeuBotao("Gerar Sugestão", tipo="acao")
         formato_layout.addWidget(self.btn_gerar_sugestao)
         layout_modo1.addLayout(formato_layout)
-
-        # Adiciona o grupo inteiro ao layout da tabela e o esconde inicialmente
         layout_tabela.addWidget(self.group_modo1)
         self.group_modo1.setVisible(False)
-        # --- FIM DA SEÇÃO MODO 1 ---
-
         self.stacked_widget.addWidget(widget_tabela)
 
-        # Unidade de Medida
         unidade_layout = QHBoxLayout()
         self.label_unidade_input = QLabel("<b>Unidade de Medida da Resposta:</b>")
         unidade_layout.addWidget(self.label_unidade_input)
-
-        self.unidade_input = NoScrollComboBox()
-        self.unidade_input.setEditable(True)
-        self.unidade_input.addItems(UNIDADES_COMUNS)
+        self.unidade_input = MeuComboBox()
+        self.unidade_input.setEditable(True); self.unidade_input.addItems(UNIDADES_PARA_DROPDOWN)
         self.unidade_input.lineEdit().setPlaceholderText("Selecione ou digite uma unidade")
-        unidade_layout.addWidget(self.unidade_input)
-        unidade_layout.addStretch()
+        unidade_layout.addWidget(self.unidade_input); unidade_layout.addStretch()
         layout_vars.addLayout(unidade_layout)
-
         layout.addWidget(self.group_variaveis)
 
-        # Grupo Alternativas
-        self.group_alternativas = QGroupBox("Alternativas e Resposta")
+        self.group_alternativas = MeuGroupBox("Alternativas e Resposta")
         layout_alternativas = QVBoxLayout(self.group_alternativas)
-
         self.alternativas_stack = QStackedWidget()
         layout_alternativas.addWidget(self.alternativas_stack)
 
-        # Página Múltipla Escolha (ME)
         page_me = QWidget()
         layout_me = QVBoxLayout(page_me)
-
         auto_layout = QHBoxLayout()
-        self.check_gerar_auto = QCheckBox("Gerar alternativas numericamente")
+        self.check_gerar_auto = MeuCheckBox("Gerar alternativas numericamente")
         self.check_gerar_auto.toggled.connect(self.atualizar_ui_formato)
-        auto_layout.addWidget(self.check_gerar_auto)
-        self.check_permitir_negativos = QCheckBox("Permitir alternativas negativas")
-        auto_layout.addWidget(self.check_permitir_negativos)
-        auto_layout.addStretch()
+        self.check_permitir_negativos = MeuCheckBox("Permitir alternativas negativas")
+        auto_layout.addWidget(self.check_gerar_auto); auto_layout.addWidget(self.check_permitir_negativos); auto_layout.addStretch()
         layout_me.addLayout(auto_layout)
 
         self.widget_alternativas_manuais = QWidget()
         layout_manuais = QVBoxLayout(self.widget_alternativas_manuais)
         layout_manuais.setSpacing(5)
-
-        # AJUSTE 4: Alternativas alinhadas na vertical
         grid_alternativas = QWidget()
-        grid_layout = QVBoxLayout(grid_alternativas) # Alterado de QHBoxLayout para QVBoxLayout
+        grid_layout = QVBoxLayout(grid_alternativas)
         grid_layout.setSpacing(5)
 
         for i, letra in enumerate(["A", "B", "C", "D", "E"]):
-            alt_layout_h = QHBoxLayout() # Novo layout horizontal para cada alternativa
-            
-            # Label da letra da alternativa
-            lbl_letra = QLabel(f"{letra})")
-            lbl_letra.setFixedWidth(20) # Define uma largura fixa
+            alt_layout_h = QHBoxLayout()
+            lbl_letra = QLabel(f"{letra})"); lbl_letra.setFixedWidth(20)
             alt_layout_h.addWidget(lbl_letra)
-            
-            alternativa = QLineEdit()
+            # --- MUDANÇA: Usa MeuLineEdit ---
+            alternativa = MeuLineEdit()
             alternativa.setPlaceholderText(f"Conteúdo da alternativa {letra}")
             self.alternativas_inputs[letra] = alternativa
             alt_layout_h.addWidget(alternativa)
-            
             grid_layout.addLayout(alt_layout_h)
 
         layout_manuais.addWidget(grid_alternativas)
-
-        # --- BLOCO MODIFICADO ---
         self.resposta_correta_widget = QWidget()
         resp_layout = QHBoxLayout(self.resposta_correta_widget)
-        resp_layout.setContentsMargins(0, 10, 0, 0) # Adiciona um espaçamento superior
+        resp_layout.setContentsMargins(0, 10, 0, 0)
         resp_layout.addWidget(QLabel("Resposta Correta:"))
-        self.resposta_correta_combo = NoScrollComboBox()
-        self.resposta_correta_combo.addItems(["A", "B", "C", "D", "E"])
-        self.resposta_correta_combo.setFixedWidth(50)
-        resp_layout.addWidget(self.resposta_correta_combo)
-        resp_layout.addStretch()
+        # --- MUDANÇA: Usa MeuComboBox ---
+        self.resposta_correta_combo = MeuComboBox()
+        self.resposta_correta_combo.addItems(["A", "B", "C", "D", "E"]); self.resposta_correta_combo.setFixedWidth(50)
+        resp_layout.addWidget(self.resposta_correta_combo); resp_layout.addStretch()
         layout_manuais.addWidget(self.resposta_correta_widget)
-        # --- FIM DO BLOCO MODIFICADO ---
-
         layout_me.addWidget(self.widget_alternativas_manuais)
         self.alternativas_stack.addWidget(page_me)
 
-        # Página Verdadeiro ou Falso (VF)
         page_vf = QWidget()
         layout_vf = QVBoxLayout(page_vf)
         layout_vf.addWidget(QLabel("Resposta Correta:"))
-
-        self.vf_verdadeiro_radio = QRadioButton("Verdadeiro")
-        self.vf_falso_radio = QRadioButton("Falso")
-
-        self.vf_button_group = QButtonGroup(self)
-        self.vf_button_group.addButton(self.vf_verdadeiro_radio)
-        self.vf_button_group.addButton(self.vf_falso_radio)
-
+        self.vf_verdadeiro_radio = QRadioButton("Verdadeiro"); self.vf_falso_radio = QRadioButton("Falso")
+        self.vf_button_group = QButtonGroup(self); self.vf_button_group.addButton(self.vf_verdadeiro_radio); self.vf_button_group.addButton(self.vf_falso_radio)
         self.vf_verdadeiro_radio.setChecked(True)
-
-        layout_vf.addWidget(self.vf_verdadeiro_radio)
-        layout_vf.addWidget(self.vf_falso_radio)
-        layout_vf.addStretch()
+        layout_vf.addWidget(self.vf_verdadeiro_radio); layout_vf.addWidget(self.vf_falso_radio); layout_vf.addStretch()
         self.alternativas_stack.addWidget(page_vf)
 
-        # Página Discursiva
         page_disc = QWidget()
         layout_disc = QVBoxLayout(page_disc)
-        layout_disc.addWidget(QLabel("Questões discursivas não possuem gabarito pré-definido e são corrigidas manualmente."))
+        layout_disc.addWidget(QLabel("Questões discursivas não possuem gabarito pré-definido..."))
         layout_disc.addStretch()
         self.alternativas_stack.addWidget(page_disc)
-
         layout.addWidget(self.group_alternativas)
-
         self.formato_combo.currentIndexChanged.connect(self.atualizar_ui_formato)
 
-        # --- Crie o novo botão Voltar/Cancelar ---
-        self.btn_voltar = QPushButton("↩️ Voltar/Cancelar")
-        self.btn_voltar.setObjectName("BotaoVoltar") # Usa o estilo cinza que já definimos
+        # --- MUDANÇA FINAL: Usa MeuBotao para os botões principais ---
+        self.btn_voltar = MeuBotao("↩️ Voltar/Cancelar", tipo="voltar")
+        self.btn_testar = MeuBotao("✔ Testar Código", tipo="testar")
+        self.btn_salvar = MeuBotao("💾 Salvar Questão", tipo="principal")
 
-        self.btn_testar = QPushButton("✔ Testar Código")
-        self.btn_testar.setObjectName("BotaoTestar")
-
-        self.btn_salvar = QPushButton("💾 Salvar Questão")
-        self.btn_salvar.setObjectName("BotaoSalvarPrincipal")
-
-        # --- Conecte os botões para emitir os sinais ---
-        self.btn_salvar.clicked.connect(self.salvar_alterar_questao) # A mudança será DENTRO deste método
-        self.btn_voltar.clicked.connect(self.voltar_pressed.emit) # Este emite o sinal para voltar
+        self.btn_salvar.clicked.connect(self.salvar_alterar_questao)
+        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)
         self.btn_testar.clicked.connect(self._testar_codigo)
 
-        # Adiciona os 3 botões ao layout
         botoes_layout = QGridLayout()
         botoes_layout.addWidget(self.btn_voltar, 0, 0)
         botoes_layout.addWidget(self.btn_testar, 0, 1)
         botoes_layout.addWidget(self.btn_salvar, 0, 2)
         layout.addLayout(botoes_layout)
 
-        # Adiciona o layout em grade ao layout principal
-        #layout.addLayout(botoes_layout)
-
         self.disciplina_input.activated.connect(self._atualizar_lista_temas)
-        self._atualizar_lista_temas() # Faz o carregamento inicial dos temas 
-
-        #self._center()
+        self._atualizar_lista_temas()
         self.configurar_modo()
         self.atualizar_ui_formato()
-
         self.check_tabela_modo1.toggled.connect(self._atualizar_ui_tabela)
         self.btn_gerar_sugestao.clicked.connect(self._gerar_sugestao_formato)
-        # Adicione um nome de objeto ao label da fórmula para podermos encontrá-lo
         self.findChild(QLabel, "label_formula_resposta").setObjectName("label_formula_resposta")
 
     def _atualizar_ui_tabela(self):
@@ -597,157 +489,6 @@ class CadastroQuestaoScreen(QWidget):
             
         # 3. Junta tudo em um único script
         return "\n".join(script_linhas)
-
-    def _aplicar_estilos(self):
-        """Define e aplica o Qt Style Sheet (QSS) para o formulário."""
-        style = """
-        /* GERAL */
-        QWidget {
-            background-color: #f7f7f7;
-            font-family: Arial;
-        }
-
-        /* TÍTULO PRINCIPAL */
-        #TituloPrincipal {
-            font-size: 24px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 2px solid #3498db;
-        }
-
-        /* GROUP BOXES (Seções) */
-        QGroupBox {
-            font-weight: bold;
-            color: #34495e; 
-            margin-top: 10px;
-            padding-top: 20px;
-            border: 1px solid #bdc3c7;
-            border-radius: 5px;
-        }
-
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            padding: 0 10px;
-            background-color: #ecf0f1; 
-            border-radius: 3px;
-        }
-
-        /* CAMPOS DE INPUT E TEXTAREA (QLineEdit, QTextEdit, QComboBox) */
-        QLineEdit, QTextEdit, QComboBox {
-            border: 1px solid #bdc3c7;
-            border-radius: 5px;
-            padding: 5px;
-            background-color: white;
-            selection-background-color: #3498db;
-        }
-        
-        QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
-            border: 1px solid #3498db;
-        }
-        
-        QTableWidget {
-            gridline-color: #ecf0f1;
-            border: 1px solid #bdc3c7;
-            selection-background-color: #95a5a6;
-        }
-
-        /* TOOLBUTTONS (Botões B, I, U, etc.) */
-        QToolButton {
-            border: 1px solid #bdc3c7;
-            border-radius: 4px;
-            background-color: #ecf0f1;
-            padding: 3px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        QToolButton:hover {
-            background-color: #c9d2d7;
-        }
-
-        /* Cor específica para o botão Voltar (Cinza) */
-            #BotaoVoltar {
-                background-color: #7f8c8d;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 26px;
-                font-weight: bold;
-                margin-top: 15px;
-            }
-            #BotaoVoltar:hover {
-                background-color: #95a5a6;
-            }
-        
-        /* BOTÕES DE AÇÃO PRINCIPAL (Salvar) */
-        #BotaoSalvarPrincipal {
-            background-color: #2ecc71;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 26px;
-            font-weight: bold;
-            margin-top: 15px;
-        }
-        #BotaoSalvarPrincipal:hover {
-            background-color: #27ae60;
-        }
-
-        /* Botão de Teste Principal */
-        #BotaoTestar {
-            background-color: #3498db; /* Azul */
-            color: white;
-            border: none;
-            border-radius: 8px;      
-            font-size: 26px;         
-            font-weight: bold;       
-            margin-top: 15px;        
-        }
-
-        #BotaoTestar:hover {
-            background-color: #2980b9; 
-        }
-
-        /* BOTÕES SECUNDÁRIOS (Imagem, Adicionar/Remover Tabela) */
-        QPushButton {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 5px 10px;
-            font-size: 22px;
-            min-height: 25px;
-        }
-        QPushButton:hover {
-            background-color: #2980b9;
-        }
-        
-        /* Botões de ação dentro da tabela (Adicionar/Remover) */
-        #BotaoAcao {
-            min-width: 80px;
-            font-size: 12px;
-            background-color: #95a5a6;
-        }
-        #BotaoAcao:hover {
-            background-color: #7f8c8d;
-        }
-        
-        /* PRÉ-VISUALIZAÇÃO DA IMAGEM */
-        #ImagemPreview {
-            border: 2px dashed #95a5a6;
-            border-radius: 5px;
-            color: #7f8c8d;
-        }
-        """
-        self.setStyleSheet(style)
-
-    def _center(self):
-        qr = self.frameGeometry()
-        cp = QDesktopWidget().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
 
     def _adicionar_linha_tabela(self):
         row = self.tabela_vars.rowCount()
@@ -1044,7 +785,7 @@ class CadastroQuestaoScreen(QWidget):
             QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")
     
     def _criar_botao_formatacao(self, text, func, tooltip):
-        btn = QToolButton()
+        btn = MeuToolButton()
         btn.setText(text)
         btn.setToolTip(tooltip)
         btn.clicked.connect(func)
@@ -1172,10 +913,6 @@ class CadastroQuestaoScreen(QWidget):
         else:
             self.titulo_label.setText("Cadastrar Nova Questão")
             self.btn_salvar.setText("💾 Salvar Questão")
-
-    # (Na sua classe CadastroQuestaoWindow, substitua o método _testar_codigo inteiro)
-
-# (Na sua classe CadastroQuestaoWindow, substitua o método _formatar_latex_para_html inteiro)
 
     def _formatar_latex_para_html(self, texto_latex):
         """
@@ -1327,7 +1064,7 @@ class CadastroQuestaoScreen(QWidget):
 
     def sizeHint(self):
         """Informa à MainWindow qual o tamanho ideal para esta tela."""
-        return QSize(950, 800)
+        return QSize(1000, 800)
     
     def _limpar_formulario(self):
         """Reseta todos os campos do formulário para o estado inicial de forma segura."""
@@ -1377,6 +1114,8 @@ class CadastroQuestaoScreen(QWidget):
         self.titulo_label.setText("Cadastro de Nova Questão")
         self._limpar_formulario() # Usa seu método de limpar já existente
         self.atualizar_ui_formato()
+        if not self.imagem_path:
+            self.imagem_preview_label.setText("Nenhuma imagem selecionada.")
 
     def abrir_para_edicao(self, questao_id):
         """Prepara a tela para editar uma questão existente."""
@@ -1391,3 +1130,5 @@ class CadastroQuestaoScreen(QWidget):
         self._limpar_formulario()
         self.carregar_dados_questao() # Usa seu método de carregar já existente
         self.atualizar_ui_formato()
+        if not self.imagem_path:
+            self.imagem_preview_label.setText("Nenhuma imagem selecionada.")

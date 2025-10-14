@@ -8,7 +8,7 @@ PREFIX_DIVISORS = {
 
 # Constante 1: A lista completa para a interface, baseada na sua lista.
 # Esta é a lista que será usada no ComboBox.
-UNIDADES_PARA_DROPDOWN = ["", "e", "C", "N/C", "S", "V", "A", "Ω", "W", "kWh", "F", "H", "Hz", "s", "m", "g", "kg", "N", "J"]
+UNIDADES_PARA_DROPDOWN = ["", "e", "C", "N/C", "S", "V", "A", "Ω", "W", "kWh", "F", "H", "T", "Wb", "Hz", "s", "m", "g", "kg", "N", "J"]
 
 # Constante 2: Um conjunto (set) de unidades BASE para a lógica do motor.
 # Derivamos esta lista da sua, pegando apenas as unidades que podem receber prefixos.
@@ -24,6 +24,8 @@ VALID_BASE_UNITS = {
     'Ω',  # Ohm
     'C',  # Coulomb
     'S',  # Siemens
+    'T',  # Tesla
+    'Wb', # Weber
     
     # Unidades Físicas Comuns
     's',  # segundo

@@ -81,10 +81,25 @@ class MainWindow(QMainWindow):
     def _aplicar_estilos(self):
         style = """
             QMainWindow { background-color: #f7f7f7; }
-            QMenuBar { background-color: #34495e; color: white; border: 1px solid #34495e; }
-            QMenuBar::item:selected { background: #2c3e50; }
-            QMenu { background-color: #34495e; color: white; border: 1px solid #2c3e50; }
-            QMenu::item:selected { background-color: #3498db; }
+            
+            /* --- TEMA AZUL ESCURO --- */
+            
+            /* Cor principal da barra (Azul Marinho) */
+            QMenuBar, QMenu { 
+                background-color: #001f3f; 
+                color: white; 
+                border: 1px solid #001f3f; 
+            }
+            
+            /* Cor da barra ao passar o mouse (um pouco mais escura) */
+            QMenuBar::item:selected { 
+                background: #001a33; 
+            }
+            
+            /* Cor do item selecionado no menu (Azul Royal para destaque) */
+            QMenu::item:selected { 
+                background-color: #4169E1; 
+            }
         """
         self.setStyleSheet(style)
 
@@ -248,3 +263,5 @@ class MainWindow(QMainWindow):
         if current_widget:
             # Pega o título da tela atual e define como o título da janela
             self.setWindowTitle(f"Gerador de Provas - {current_widget.windowTitle()}")
+            self.setFixedSize(current_widget.sizeHint())
+            self._center()

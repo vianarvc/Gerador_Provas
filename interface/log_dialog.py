@@ -1,24 +1,36 @@
 # interface/log_dialog.py
 
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QApplication
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QApplication
 from PyQt5.QtCore import Qt
+from .custom_widgets import MeuTextEdit, EstilosApp
 
 class LogDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Progresso da Geração")
-        self.setModal(False) # Permite interagir com a janela principal (se necessário)
+        self.setModal(False)
         self.setMinimumSize(600, 400)
         
         layout = QVBoxLayout(self)
         
-        self.log_text_edit = QTextEdit()
+        # --- MUDANÇA 2: Usa o MeuTextEdit ---
+        self.log_text_edit = MeuTextEdit()
         self.log_text_edit.setReadOnly(True)
         layout.addWidget(self.log_text_edit)
         
+        # --- MUDANÇA 3: Usa QPushButton + EstilosApp para um tamanho customizado ---
         self.close_button = QPushButton("Fechar")
-        self.close_button.setEnabled(False) # Começa desabilitado
+        self.close_button.setEnabled(False)
         self.close_button.clicked.connect(self.accept)
+        
+        # Aplica um estilo menor e mais apropriado para um botão de diálogo
+        EstilosApp.aplicar(
+            botao=self.close_button,
+            estilo="cinza",
+            font_size=16,
+            min_height=40
+        )
+        
         layout.addWidget(self.close_button)
         
         self.append_log("Iniciando a geração das provas...")

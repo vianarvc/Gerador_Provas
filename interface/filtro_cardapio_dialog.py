@@ -1,37 +1,41 @@
 # interface/filtro_cardapio_dialog.py
 
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout
 from database import obter_disciplinas, obter_temas, obter_disciplina_id_por_nome
+# --- MUDANÇA 1: Importa os widgets customizados ---
+from .custom_widgets import MeuLabel, MeuComboBox, MeuBotao
 
 class FiltroCardapioDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Filtros para o Cardápio")
-        self.setFixedSize(600, 200)
+        #self.setFixedSize(700, 300)
 
         self.disciplina_id = None
         self.tema = None
 
         layout = QVBoxLayout(self)
 
+        # --- MUDANÇA 2: Usa os widgets customizados ---
         # Layout da Disciplina
-        layout.addWidget(QLabel("<b>1. Escolha a Disciplina:</b>"))
-        self.combo_disciplina = QComboBox()
+        layout.addWidget(MeuLabel("<b>1. Escolha a Disciplina:</b>", tamanho=14))
+        self.combo_disciplina = MeuComboBox()
         self.combo_disciplina.addItems(obter_disciplinas())
         layout.addWidget(self.combo_disciplina)
 
         # Layout do Tema
-        layout.addWidget(QLabel("<b>2. Escolha o Tema:</b>"))
-        self.combo_tema = QComboBox()
+        layout.addWidget(MeuLabel("<b>2. Escolha o Tema:</b>", tamanho=14))
+        self.combo_tema = MeuComboBox()
         layout.addWidget(self.combo_tema)
 
-        layout.addStretch()
+        #layout.addStretch()
+        layout.addSpacing(20)
 
         # Botões OK e Cancelar
         botoes_layout = QHBoxLayout()
         botoes_layout.addStretch()
-        self.btn_cancelar = QPushButton("Cancelar")
-        self.btn_ok = QPushButton("Gerar")
+        self.btn_cancelar = MeuBotao("Cancelar", tipo="voltar")
+        self.btn_ok = MeuBotao("🚀 Gerar Cardápio", tipo="principal")
         self.btn_ok.setDefault(True)
         botoes_layout.addWidget(self.btn_cancelar)
         botoes_layout.addWidget(self.btn_ok)

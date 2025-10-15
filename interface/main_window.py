@@ -56,21 +56,53 @@ class MainWindow(QMainWindow):
         self.main_menu.visualizar_questoes_pressed.connect(self.show_visualizar_questoes)
         self.main_menu.gerar_cardapio_pressed.connect(self._abrir_gerador_cardapio)
         self.main_menu.gerar_prova_pressed.connect(self.abrir_gerador_prova)
+        
+        # --- CONEXÕES DA TELA DE VISUALIZAÇÃO ---
         self.visualizar_screen.back_to_main_menu_pressed.connect(self.navigate_back)
         self.visualizar_screen.edit_questao_pressed.connect(self.show_cadastro_para_edicao)
-        self.cadastro_screen.cadastro_concluido.connect(self.show_visualizar_questoes)
+        
+        # --- CONEXÕES DA TELA DE CADASTRO ---
+        self.cadastro_screen.cadastro_concluido.connect(self.ao_concluir_cadastro)
         self.cadastro_screen.voltar_pressed.connect(self.navigate_back)
+        
+        # --- CONEXÕES DOS GERADORES ---
         self.gerador_id_screen.voltar_pressed.connect(self.navigate_back)
         self.gerador_criterios_screen.voltar_pressed.connect(self.navigate_back)
 
         self.gerador_window = None
         self.previous_screen = None
 
-        #  CONECTA O SINAL DE TROCA DE TELA AO MÉTODO DE AJUSTE
+        # CONECTA O SINAL DE TROCA DE TELA AO MÉTODO DE AJUSTE
         self.stacked_widget.currentChanged.connect(self._on_screen_changed)
 
-        #  FORÇA UMA CHAMADA INICIAL PARA AJUSTAR LOGO AO ABRIR
+        # FORÇA UMA CHAMADA INICIAL PARA AJUSTAR LOGO AO ABRIR
         self._on_screen_changed(self.stacked_widget.currentIndex())
+
+    def show_cadastro_para_edicao(self, questao_id):
+        """Abre a tela de cadastro para edição de uma questão existente"""
+        self.cadastro_screen.abrir_para_edicao(questao_id)
+        self._navigate_to(self.cadastro_screen)
+
+    def ao_concluir_cadastro(self, questao_id=None):
+        """
+        Chamado quando uma questão é salva (criação ou edição)
+        Se questao_id for None, é uma nova questão
+        """
+        # Volta para a tela de visualização
+        self.stacked_widget.setCurrentWidget(self.visualizar_screen)
+        
+        # Atualiza a lista de questões
+        self.visualizar_screen.refresh_geral()
+        
+        # Se foi uma edição (questao_id existe), atualiza os detalhes
+        if questao_id is not None:
+            self.visualizar_screen.atualizar_detalhes_apos_edicao(questao_id)
+        
+        # Opcional: Mostra mensagem de sucesso
+        if questao_id:
+            QMessageBox.information(self, "Sucesso", f"Questão ID {questao_id} salva com sucesso!")
+        else:
+            QMessageBox.information(self, "Sucesso", "Nova questão criada com sucesso!")
 
     def showEvent(self, event):
         """ É chamado ANTES de a janela ser exibida. """
@@ -102,10 +134,9 @@ class MainWindow(QMainWindow):
         self._center()'''
 
     def show_cadastro_para_criacao(self):
+        """Abre a tela de cadastro para criar uma nova questão"""
         self.cadastro_screen.abrir_para_criacao()
         self._navigate_to(self.cadastro_screen)
-        ''''self.resize(self.cadastro_screen.sizeHint())
-        self._center()'''
 
     def show_cadastro_para_edicao(self, questao_id):
         self.cadastro_screen.abrir_para_edicao(questao_id)

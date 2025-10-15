@@ -15,7 +15,7 @@
 \setlength{\headheight}{50pt}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\includegraphics[height=1.5cm]{logo-iff.png}}
+\fancyhead[L]{\IfFileExists{logo-iff.png}{\includegraphics[height=1.5cm]{logo-iff.png}}{}} % ⭐ CORRIGIDO
 \fancyhead[C]{\textbf{\Large GABARITO OFICIAL}}
 \fancyfoot[C]{Página \thepage}
 \renewcommand{\headrulewidth}{0.4pt}

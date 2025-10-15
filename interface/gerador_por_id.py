@@ -13,7 +13,7 @@ from database import (
     obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, 
     carregar_configuracoes, buscar_questoes_por_ids
 )
-from motor_gerador import gerar_versoes_prova
+from motor_gerador.core import gerar_versoes_prova
 from gerador_pdf import criar_pdf_provas
 from .custom_widgets import (
     MeuLineEdit, MeuSpinBox, MeuDoubleSpinBox, MeuComboBox, MeuLabel, MeuGroupBox, EstilosApp,
@@ -138,11 +138,8 @@ class GeradorPorIdScreen(QWidget):
 
         # --- Botões Finais ---
         botoes_finais_layout = QHBoxLayout()
-        '''self.btn_voltar = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
-        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)'''
         self.btn_gerar = MeuBotao("🚀 Gerar Prova", tipo="principal")
         self.btn_gerar.clicked.connect(self._gerar_prova)
-        #botoes_finais_layout.addWidget(self.btn_voltar)
         botoes_finais_layout.addStretch()
         botoes_finais_layout.addWidget(self.btn_gerar)
         content_layout.addLayout(botoes_finais_layout)
@@ -228,11 +225,18 @@ class GeradorPorIdScreen(QWidget):
             if index != -1:
                 combo_tema.setCurrentIndex(index)
 
-        self._atualizar_contadores()
-
-
     def _gerar_prova(self):
-        # --- ETAPA 1: Coleta de Dados e Validação (Sem alterações) ---
+        # --- ETAPA 1: Coleta de Dados e Validação ---
+        from motor_gerador.cache_manager import iniciar_nova_geracao_cache
+        
+        nome_prova = self.nome_input.text().strip() or "Prova_Por_ID"
+        iniciar_nova_geracao_cache(f"prova_id_{nome_prova}")
+        
+        ids_texto = self.ids_input.toPlainText().strip()
+        if not ids_texto:
+            QMessageBox.warning(self, "Atenção", "Por favor, insira pelo menos um ID de questão.")
+            return
+
         ids_texto = self.ids_input.toPlainText().strip()
         if not ids_texto:
             QMessageBox.warning(self, "Atenção", "Por favor, insira pelo menos um ID de questão.")
@@ -275,6 +279,7 @@ class GeradorPorIdScreen(QWidget):
         
         # 3. Cria o dicionário de opções para o MOTOR GERADOR com os dados corretos
         opcoes_geracao = {
+            "nome_prova": nome_prova,
             "gabarito": {
                 "distribuir": self.check_distribuir.isChecked(),
                 "rotacao": self.rotacao_spinbox.value(),
@@ -303,7 +308,7 @@ class GeradorPorIdScreen(QWidget):
         }
         self.temp_nome_arquivo_base = self.nome_input.text()
 
-        # --- ETAPA 3: Cria e Inicia a Thread (Sem alterações) ---
+        # --- ETAPA 3: Cria e Inicia a Thread ---
         self.thread = QThread()
         self.worker = GeradorWorker(questoes_base, num_versoes, opcoes_geracao)
         self.worker.moveToThread(self.thread)

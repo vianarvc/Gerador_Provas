@@ -216,8 +216,10 @@ def salvar_questao(dados_dict):
     placeholders = ', '.join(['?'] * len(dados_dict))
     valores = list(dados_dict.values())
     cursor.execute(f"INSERT INTO questoes ({colunas}) VALUES ({placeholders})", valores)
+    questao_id = cursor.lastrowid  # ← CAPTURA O ID
     conn.commit()
     conn.close()
+    return questao_id
 
 def atualizar_questao(questao_id, dados_dict):
     conn = connect_db()

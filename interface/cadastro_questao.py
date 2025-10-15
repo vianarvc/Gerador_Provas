@@ -21,7 +21,7 @@ import random
 import io
 import sys
 from contextlib import redirect_stdout
-import motor_gerador
+from motor_gerador.core import _gerar_variante_questao
 from constants import UNIDADES_PARA_DROPDOWN
 
 class PythonHighlighter(QSyntaxHighlighter):
@@ -59,7 +59,7 @@ class PythonHighlighter(QSyntaxHighlighter):
                 self.setFormat(match.start(), match.end() - match.start(), format)
 
 class CadastroQuestaoScreen(QWidget):
-    cadastro_concluido = pyqtSignal()  # Sinal para avisar que salvou/atualizou
+    cadastro_concluido = pyqtSignal(int)  # ← AGORA COM PARÂMETRO
     voltar_pressed = pyqtSignal() # Sinal para avisar que quer cancelar/voltar
     questao_atualizada = pyqtSignal()
 
@@ -775,12 +775,14 @@ class CadastroQuestaoScreen(QWidget):
             if self.questao_id:
                 atualizar_questao(self.questao_id, dados_questao)
                 QMessageBox.information(self, "Sucesso", "Questão atualizada com sucesso!")
+                questao_id_salva = self.questao_id  # ← GUARDA O ID
             else:
-                salvar_questao(dados_questao)
+                questao_id_salva = salvar_questao(dados_questao)  # ← CAPTURA O NOVO ID
                 QMessageBox.information(self, "Sucesso", "Questão salva com sucesso!")
             
-            self.questao_atualizada.emit()
-            self.cadastro_concluido.emit() # <-- AVISA a MainWindow que terminou com sucesso
+            # ⭐ MUDANÇA CRÍTICA: Emite o sinal com o ID da questão
+            self.cadastro_concluido.emit(questao_id_salva)  # ← AGORA COM PARÂMETRO
+            
         except Exception as e:
             QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")
     
@@ -1012,7 +1014,7 @@ class CadastroQuestaoScreen(QWidget):
             with redirect_stdout(log_stream):
                 try:
                     # Chama o motor dentro do loop com a semente da vez
-                    variante_tentativa = motor_gerador._gerar_variante_questao(questao_base, seed=seed_teste)
+                    variante_tentativa = _gerar_variante_questao(questao_base, seed=seed_teste)
                 except Exception as e:
                     print(f"ERRO CRÍTICO DURANTE O TESTE (tentativa {tentativa}):\n{e}")
                     variante_tentativa = None

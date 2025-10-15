@@ -36,7 +36,7 @@
 \fancyhf{}
 
 % CABEÇALHO
-\fancyhead[L]{\includegraphics[height=1.5cm]{logo-iff.png}}
+\fancyhead[L]{\includegraphics[height=1.5cm]{logo-iff.png}} % ← CAMINHO ATUALIZADO
 \fancyhead[R]{%
     \begin{tabular}{@{}r@{}}
         \textbf{\textit{<<nomeDisciplina>>}} \\
@@ -59,7 +59,7 @@
 % --- Estilo Personalizado para a Capa ---
 \fancypagestyle{capa}{
     \fancyhf{}
-    \fancyhead[L]{\includegraphics[height=1.5cm]{logo-iff.png}}
+    \fancyhead[L]{\includegraphics[height=1.5cm]{logo-iff.png}} % ← CAMINHO ATUALIZADO
     \fancyhead[R]{%
         \begin{tabular}{@{}r@{}}
             \textbf{\textit{<<nomeDisciplina>>}} \\
@@ -79,7 +79,6 @@
 }
 
 % --- Comando para o Título da Questão (Argumentos: 1=Número, 2=Valor) ---
-% Unindo o design do seu novo modelo com a funcionalidade do antigo (exibir valor)
 \newcommand{\questiontitle}[1]{%
     \par 
     \noindent
@@ -98,7 +97,7 @@
     
     % --- Tabela para os dados do Aluno (do seu novo modelo) ---
     \begin{center}
-         \includegraphics[width=\textwidth]{tabela_dados_aluno.png} 
+         \includegraphics[width=\textwidth]{tabela_dados_aluno.png} % ← CAMINHO ATUALIZADO
     \end{center}
     
     % --- Capa da Prova (seguindo seu novo modelo, mas com variáveis) ---
@@ -131,12 +130,11 @@
     \noindent\fcolorbox{black}{lightgray}{\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{\centering\textbf{LEIA COM ATENÇÃO AS INSTRUÇÕES ABAIXO.}}}
     
     \begin{enumerate}[label=\bfseries\arabic*. , wide, labelwidth=!, labelindent=0pt, leftmargin=*]
-        % (Mantendo as novas instruções do seu último arquivo)
         \item Você está recendo o seguinte material:
         \begin{enumerate}[label=\alph*)]
             \item 1 caderno de questões, contendo: \\
             
-            \noindent % Garante que o minipage comece imediatamente
+            \noindent
             \begin{minipage}{\linewidth}
                 \par\centering 
                 \begingroup 

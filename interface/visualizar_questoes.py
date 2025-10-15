@@ -282,7 +282,127 @@ class VisualizarQuestoesScreen(QWidget):
     def abrir_edicao(self):
         """Em vez de abrir uma janela, emite um sinal com o ID da questão."""
         if self.id_questao_selecionada is not None:
+            # Salva o ID atual antes de abrir a edição
+            self.id_para_editar = self.id_questao_selecionada
             self.edit_questao_pressed.emit(self.id_questao_selecionada)
+
+    def atualizar_detalhes_apos_edicao(self, questao_id_atualizada=None):
+        """
+        Atualiza a tela de detalhes após uma edição ser salva
+        Se questao_id_atualizada for None, usa o ID salvo anteriormente
+        """
+        # Determina qual ID usar para recarregar
+        id_para_recarregar = questao_id_atualizada if questao_id_atualizada is not None else self.id_para_editar
+        
+        if id_para_recarregar is None:
+            return
+        
+        # Recarrega a questão do banco de dados
+        from database import obter_questao_por_id
+        questao_atualizada = obter_questao_por_id(id_para_recarregar)
+        
+        if not questao_atualizada:
+            QMessageBox.warning(self, "Aviso", "Questão não encontrada após edição.")
+            self._voltar_para_lista()
+            return
+        
+        # Atualiza a lista de questões atuais
+        for i, questao in enumerate(self.questoes_atuais):
+            if questao['id'] == id_para_recarregar:
+                self.questoes_atuais[i] = questao_atualizada
+                break
+        
+        # Se estamos na tela de detalhes, atualiza a exibição
+        if self.stacked_widget.currentWidget() == self.tela_detalhes:
+            # Atualiza o ID selecionado
+            self.id_questao_selecionada = id_para_recarregar
+            # Força a atualização da tela de detalhes
+            self.exibir_detalhes_questao_por_id(id_para_recarregar)
+
+    def exibir_detalhes_questao_por_id(self, questao_id):
+        """
+        Exibe os detalhes de uma questão específica pelo ID
+        """
+        # Encontra a questão na lista atual
+        questao = None
+        for q in self.questoes_atuais:
+            if q['id'] == questao_id:
+                questao = q
+                break
+        
+        if not questao:
+            QMessageBox.warning(self, "Aviso", f"Questão ID {questao_id} não encontrada na lista atual.")
+            return
+        
+        # Limpa o layout de detalhes
+        while self.layout_conteudo_detalhes.count():
+            child = self.layout_conteudo_detalhes.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # Preenche com os novos detalhes (usa o mesmo código do exibir_detalhes_questao)
+        fonte_normal = QFont("Arial", 12)
+
+        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>ID da Questão:</b> {questao['id']}", fonte_normal))
+        
+        status_texto = "ATIVA" if questao.get("ativa", 1) else "INATIVA"
+        status_cor = "green" if questao.get("ativa", 1) else "red"
+        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Status:</b> <span style='color:{status_cor};'>{status_texto}</span>", fonte_normal))
+        
+        disciplina_nome = obter_disciplina_nome_por_id(questao.get("disciplina_id"))
+        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Disciplina:</b> {disciplina_nome}", fonte_normal))
+        
+        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Tema:</b> {questao['tema']}", fonte_normal))
+        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Formato:</b> {questao['formato_questao']}", fonte_normal))
+        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Dificuldade:</b> {questao['dificuldade']}", fonte_normal))
+        
+        if questao.get("fonte"):
+            self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Fonte:</b> {questao['fonte']}", fonte_normal))
+        
+        self.layout_conteudo_detalhes.addWidget(self.criar_label("<b>Enunciado:</b>", fonte_normal))
+        txt_enunciado = QTextEdit()
+        txt_enunciado.setReadOnly(True)
+        txt_enunciado.setPlainText(questao["enunciado"])
+        txt_enunciado.document().adjustSize()
+        txt_enunciado.setFixedHeight(int(txt_enunciado.document().size().height() + 10))
+        self.layout_conteudo_detalhes.addWidget(txt_enunciado)
+        
+        caminho_imagem = questao.get("imagem")
+        if caminho_imagem and os.path.exists(caminho_imagem):
+            self.layout_conteudo_detalhes.addWidget(self.criar_label("<b>Imagem:</b>", fonte_normal))
+            lbl_imagem = QLabel()
+            pixmap = QPixmap(caminho_imagem)
+            lbl_imagem.setPixmap(pixmap.scaledToWidth(400, Qt.SmoothTransformation))
+            self.layout_conteudo_detalhes.addWidget(lbl_imagem)
+            
+        if questao.get("parametros"):
+            self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Parâmetros ({questao.get('tipo_questao', 'N/A')}):</b>", fonte_normal))
+            txt_parametros = QTextEdit()
+            txt_parametros.setReadOnly(True)
+            txt_parametros.setFont(QFont("Courier", 10))
+            try:
+                params_formatted = json.dumps(json.loads(questao["parametros"]), indent=4, ensure_ascii=False)
+                txt_parametros.setText(params_formatted)
+            except:
+                txt_parametros.setText(questao.get("parametros", ""))
+            txt_parametros.setFixedHeight(150)
+            self.layout_conteudo_detalhes.addWidget(txt_parametros)
+        
+        if questao['formato_questao'] == 'Múltipla Escolha':
+            self.layout_conteudo_detalhes.addWidget(self.criar_label("<b>Alternativas e Resposta:</b>", fonte_normal))
+            if questao.get("gerar_alternativas_auto"):
+                self.layout_conteudo_detalhes.addWidget(self.criar_label("<i>As alternativas são geradas numericamente.</i>", fonte_normal))
+            else:
+                for letra in ["a", "b", "c", "d", "e"]:
+                    alt = questao.get(f"alternativa_{letra}")
+                    if alt:
+                        self.layout_conteudo_detalhes.addWidget(self.criar_label(f"&nbsp;&nbsp;<b>{letra.upper()})</b> {alt}", fonte_normal))
+                if questao.get("resposta_correta"):
+                    resposta_texto = str(questao['resposta_correta']).upper()
+                    self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Resposta Correta:</b> <span style='color:green;'>{resposta_texto}</span>", fonte_normal))
+
+        # Garante que permaneça na tela de detalhes
+        self.stacked_widget.setCurrentWidget(self.tela_detalhes)
 
     def confirmar_exclusao(self):
         # Este método pode continuar como está, pois usa um QMessageBox que é modal

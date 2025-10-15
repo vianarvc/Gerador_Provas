@@ -1,7 +1,7 @@
-PWD d:\Documentos\Projetos_Python\GeradorProva
+PWD d:\Documentos\Projetos_Python\GeradorProva\templates
 INPUT C:\Users\viana\AppData\Local\MiKTeX\miktex\data\le\pdftex\pdflatex.fmt
-INPUT d:\Documentos\Projetos_Python\GeradorProva\modelo_gabarito.tex
-OUTPUT modelo_gabarito.log
+INPUT d:\Documentos\Projetos_Python\GeradorProva\templates\modelo_cardapio.tex
+OUTPUT modelo_cardapio.log
 INPUT C:\Users\viana\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\viana\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\viana\AppData\Local\Programs\MiKTeX\tex\latex\base\size12.clo

@@ -1,6 +1,6 @@
-PWD d:\Documentos\Projetos_Python\GeradorProva
+PWD d:\Documentos\Projetos_Python\GeradorProva\templates
 INPUT C:\Users\viana\AppData\Local\MiKTeX\miktex\data\le\pdftex\pdflatex.fmt
-INPUT d:\Documentos\Projetos_Python\GeradorProva\modelo_prova.tex
+INPUT d:\Documentos\Projetos_Python\GeradorProva\templates\modelo_prova.tex
 OUTPUT modelo_prova.log
 INPUT C:\Users\viana\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\viana\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls

@@ -1,7 +1,7 @@
 # interface/worker_gerador.py
 
 from PyQt5.QtCore import QObject, pyqtSignal
-from motor_gerador import gerar_versoes_prova
+from motor_gerador.core import gerar_versoes_prova
 
 class GeradorWorker(QObject):
     """
@@ -25,6 +25,8 @@ class GeradorWorker(QObject):
         Este é o método que será executado na thread secundária.
         """
         try:
+            self.progress.emit(f"Iniciando geração de {self.num_versoes} versões...")
+            
             # Chama a função pesada
             versoes_geradas = gerar_versoes_prova(
                 self.questoes_base, 

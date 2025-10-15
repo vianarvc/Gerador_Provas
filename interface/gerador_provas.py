@@ -13,7 +13,7 @@ from database import (
     obter_temas, buscar_questoes_para_prova, contar_questoes_por_criterio,
     obter_disciplinas, obter_disciplina_id_por_nome, carregar_configuracoes
 )
-from motor_gerador import gerar_versoes_prova
+from motor_gerador.core import gerar_versoes_prova
 from gerador_pdf import criar_pdf_provas
 from .custom_widgets import (
     MeuLineEdit, MeuSpinBox, MeuDoubleSpinBox, MeuComboBox, MeuLabel, MeuGroupBox, EstilosApp,
@@ -114,7 +114,6 @@ class GeradorProvasScreen(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setObjectName("ScrollCriterios")
         scroll.setMinimumHeight(350)
-        #scroll.setMaximumHeight(700)
         scroll_content = QWidget()
         self.layout_scroll = QVBoxLayout(scroll_content)
         scroll.setWidget(scroll_content)
@@ -152,13 +151,9 @@ class GeradorProvasScreen(QWidget):
 
         # --- Botões finais ---
         botoes_layout = QHBoxLayout()
-        '''self.btn_voltar = MeuBotao("↩️ Voltar ao Menu", tipo="voltar")
-        self.btn_voltar.clicked.connect(self.voltar_pressed.emit)'''
-        
         self.btn_gerar = MeuBotao("🚀 Gerar Prova", tipo="principal")
         self.btn_gerar.clicked.connect(self._gerar_prova)
         
-        #botoes_layout.addWidget(self.btn_voltar)
         botoes_layout.addStretch()
         botoes_layout.addWidget(self.btn_gerar)
         content_layout.addLayout(botoes_layout)
@@ -195,7 +190,6 @@ class GeradorProvasScreen(QWidget):
         
         self._disciplina_selecionada()
 
-    # --- MUDANÇA 4: Novas funções para carregar e selecionar disciplina ---
     def _carregar_disciplinas(self):
         self.disciplina_combo.clear()
         disciplinas = obter_disciplinas()
@@ -227,10 +221,8 @@ class GeradorProvasScreen(QWidget):
 
         self._atualizar_contadores()
 
-    # --- _add_linha_tema` agora usa temas filtrados ---
     def _add_linha_tema(self):
         tema_group = MeuGroupBox("Critério por Tema")
-        #tema_group.setMinimumHeight(400)
         tema_layout = QVBoxLayout(tema_group)
         
         header_layout = QHBoxLayout()
@@ -253,7 +245,6 @@ class GeradorProvasScreen(QWidget):
         tema_layout.addLayout(header_layout)
 
         grid_layout = QGridLayout()
-        # ... (Restante do seu código para criar a grade de spinboxes)
         formatos = ["Múltipla Escolha", "Verdadeiro ou Falso", "Discursiva"]
         dificuldades = ["Fácil", "Média", "Difícil"]
         spins = {}
@@ -268,7 +259,6 @@ class GeradorProvasScreen(QWidget):
         grid_layout.addWidget(QLabel("<b>Fácil</b>"), 0, 1, Qt.AlignCenter)
         grid_layout.addWidget(QLabel("<b>Média</b>"), 0, 2, Qt.AlignCenter)
         grid_layout.addWidget(QLabel("<b>Difícil</b>"), 0, 3, Qt.AlignCenter)
-        # ... (Fim da criação da grade)
         
         tema_layout.addLayout(grid_layout)
         self.layout_scroll.addWidget(tema_group)
@@ -279,7 +269,6 @@ class GeradorProvasScreen(QWidget):
         combo_tema.currentIndexChanged.connect(self._atualizar_contadores)
         self._atualizar_contadores_linha(nova_linha_ref)
 
-    # --- MUDANÇA 6: `_atualizar_contadores_linha` agora passa o disciplina_id ---
     def _atualizar_contadores_linha(self, linha_ref):
         tema = linha_ref["combo"].currentText()
         disciplina_id = obter_disciplina_id_por_nome(self.disciplina_combo.currentText())
@@ -298,163 +287,154 @@ class GeradorProvasScreen(QWidget):
                 widgets["label"].setText(f"({count} disp.)")
                 widgets["spin"].setMaximum(count)
 
-    # --- MUDANÇA 7: `_gerar_prova` agora passa o disciplina_id ---
     def _gerar_prova(self):
-            # --- ETAPA 1: Coleta de Dados e Validação (Executa na Thread Principal) ---
-            disciplina_id = obter_disciplina_id_por_nome(self.disciplina_combo.currentText())
-            if not disciplina_id:
-                QMessageBox.warning(self, "Erro", "Por favor, selecione uma disciplina.")
-                return
+        # --- ETAPA 1: Coleta de Dados e Validação (Executa na Thread Principal) ---
+        from motor_gerador.cache_manager import iniciar_nova_geracao_cache
+        
+        nome_prova = self.nome_input.text().strip() or "Prova_Sem_Nome"
+        iniciar_nova_geracao_cache(f"prova_{nome_prova}")
+        
+        disciplina_id = obter_disciplina_id_por_nome(self.disciplina_combo.currentText())
+        if not disciplina_id:
+            QMessageBox.warning(self, "Erro", "Por favor, selecione uma disciplina.")
+            return
 
-            criterios_granulares = {}
-            num_total_questoes = 0
-            for linha in self.linhas_tema:
-                tema = linha["combo"].currentText()
-                if not tema: continue
-                chave_criterio = (disciplina_id, tema)
-                if chave_criterio not in criterios_granulares:
-                    criterios_granulares[chave_criterio] = {}
-                for formato, dificuldades in linha["spins"].items():
-                    if formato not in criterios_granulares[chave_criterio]:
-                        criterios_granulares[chave_criterio][formato] = {}
-                    for dificuldade, widgets in dificuldades.items():
-                        qtd = widgets["spin"].value()
-                        if qtd > 0:
-                            criterios_granulares[chave_criterio][formato][dificuldade] = qtd
-                            num_total_questoes += qtd
-            
-            if num_total_questoes == 0:
-                QMessageBox.warning(self, "Erro", "Nenhuma questão foi selecionada.")
-                return
+        criterios_granulares = {}
+        num_total_questoes = 0
+        for linha in self.linhas_tema:
+            tema = linha["combo"].currentText()
+            if not tema: continue
+            chave_criterio = (disciplina_id, tema)
+            if chave_criterio not in criterios_granulares:
+                criterios_granulares[chave_criterio] = {}
+            for formato, dificuldades in linha["spins"].items():
+                if formato not in criterios_granulares[chave_criterio]:
+                    criterios_granulares[chave_criterio][formato] = {}
+                for dificuldade, widgets in dificuldades.items():
+                    qtd = widgets["spin"].value()
+                    if qtd > 0:
+                        criterios_granulares[chave_criterio][formato][dificuldade] = qtd
+                        num_total_questoes += qtd
+        
+        if num_total_questoes == 0:
+            QMessageBox.warning(self, "Erro", "Nenhuma questão foi selecionada.")
+            return
 
-            # Busca as questões na thread principal (geralmente rápido)
-            num_versoes = self.versoes_spinbox.value()
-            questoes_base, avisos = buscar_questoes_para_prova(criterios_granulares, num_versoes)
+        # Busca as questões na thread principal (geralmente rápido)
+        num_versoes = self.versoes_spinbox.value()
+        questoes_base, avisos = buscar_questoes_para_prova(criterios_granulares, num_versoes)
 
-            if not questoes_base:
-                QMessageBox.critical(self, "Erro", "Nenhuma questão foi encontrada com os critérios selecionados.")
-                return
+        if not questoes_base:
+            QMessageBox.critical(self, "Erro", "Nenhuma questão foi encontrada com os critérios selecionados.")
+            return
 
-            # Prepara o log e desabilita o botão para evitar cliques duplos
-            self.log_dialog = LogDialog(self)
-            self.log_dialog.show()
-            self.btn_gerar.setEnabled(False)
-            self.log_dialog.append_log("Buscando questões no banco de dados...")
-            if avisos:
-                self.log_dialog.append_log("\n--- AVISOS ---")
-                for aviso in avisos:
-                    self.log_dialog.append_log(aviso)
-                self.log_dialog.append_log("---------------\n")
-            self.log_dialog.append_log(f"{len(questoes_base)} questões de base encontradas.")
-            self.log_dialog.append_log("Gerando variações... Este processo pode levar um momento.")
-            QApplication.processEvents() # Força a UI a atualizar antes de iniciar a thread
+        # Prepara o log e desabilita o botão para evitar cliques duplos
+        self.log_dialog = LogDialog(self)
+        self.log_dialog.show()
+        self.btn_gerar.setEnabled(False)
+        self.log_dialog.append_log("Buscando questões no banco de dados...")
+        if avisos:
+            self.log_dialog.append_log("\n--- AVISOS ---")
+            for aviso in avisos:
+                self.log_dialog.append_log(aviso)
+            self.log_dialog.append_log("---------------\n")
+        self.log_dialog.append_log(f"{len(questoes_base)} questões de base encontradas.")
+        self.log_dialog.append_log("Gerando variações... Este processo pode levar um momento.")
+        QApplication.processEvents() # Força a UI a atualizar antes de iniciar a thread
 
-            # --- ETAPA 2: Prepara os dados para a Thread ---
-            # Coleta todas as informações necessárias ANTES de iniciar a thread.
-            config = carregar_configuracoes()
-            valor_total = self.valor_total_spinbox.value()
-            valor_por_questao = 0.0
-            valor_por_questao_display = "Vide a Questão"
-            if self.check_distribuir_valor.isChecked():
-                valor_por_questao = valor_total / num_total_questoes if num_total_questoes > 0 else 0
-                valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
+        # --- ETAPA 2: Prepara os dados para a Thread ---
+        # Coleta todas as informações necessárias ANTES de iniciar a thread.
+        config = carregar_configuracoes()
+        valor_total = self.valor_total_spinbox.value()
+        valor_por_questao = 0.0
+        valor_por_questao_display = "Vide a Questão"
+        if self.check_distribuir_valor.isChecked():
+            valor_por_questao = valor_total / num_total_questoes if num_total_questoes > 0 else 0
+            valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
 
-            opcoes_geracao = {
-                "gabarito": {
-                    "distribuir": self.check_distribuir.isChecked(),
-                    "rotacao": self.rotacao_spinbox.value(),
-                    "embaralhar_questoes": self.check_embaralhar.isChecked()
-                },
-                "pontuacao": {
-                    "valor_total": valor_total, 
-                    "valor_por_questao": valor_por_questao,
-                    "mostrar_valor_individual": self.check_distribuir_valor.isChecked() # Adicionado para consistência
-                }
+        opcoes_geracao = {
+            "nome_prova": nome_prova,  # ← ADICIONADO para o cache
+            "gabarito": {
+                "distribuir": self.check_distribuir.isChecked(),
+                "rotacao": self.rotacao_spinbox.value(),
+                "embaralhar_questoes": self.check_embaralhar.isChecked()
+            },
+            "pontuacao": {
+                "valor_total": valor_total, 
+                "valor_por_questao": valor_por_questao,
+                "mostrar_valor_individual": self.check_distribuir_valor.isChecked()
             }
+        }
 
-            valor_total = self.valor_total_spinbox.value()
-            valor_por_questao = 0.0
-            valor_por_questao_display = "" # Fica em branco por padrão
+        # Salva os dados que serão necessários DEPOIS que a thread terminar
+        self.temp_dados_pdf = { 
+            "nomeDisciplina": self.disciplina_combo.currentText(), 
+            "tipoExame": "AVALIAÇÃO",
+            "bimestre": self.bimestre_input.text(),
+            "nomeProfessor": config.get("nome_professor", ""),
+            "siglaCurso": config.get("sigla_curso", "CURSO"),
+            "nomeCursoCompleto": config.get("nome_curso", ""),
+            "nomeEscola": config.get("nome_escola", ""),
+            "emailContato": config.get("email_contato", ""),
+            "numeroQuestoes": num_total_questoes, 
+            "valorPorQuestao": valor_por_questao_display, 
+            "valorTotalProva": f"{valor_total:.2f}".replace('.', ',') 
+        }
+        self.temp_nome_arquivo_base = self.nome_input.text()
 
-            # Verifica se a opção de distribuir valor está marcada
-            if self.check_distribuir_valor.isChecked():
-                # A variável num_total_questoes foi calculada no início do método
-                if num_total_questoes > 0:
-                    valor_por_questao = valor_total / num_total_questoes
-                    valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
+        # --- ETAPA 3: Cria e Inicia a Thread ---
+        self.thread = QThread()
+        self.worker = GeradorWorker(questoes_base, num_versoes, opcoes_geracao)
+        self.worker.moveToThread(self.thread)
 
-            # Salva os dados que serão necessários DEPOIS que a thread terminar
-            self.temp_dados_pdf = { 
-                "nomeDisciplina": self.disciplina_combo.currentText(), 
-                "tipoExame": "AVALIAÇÃO",
-                "bimestre": self.bimestre_input.text(),
-                "nomeProfessor": config.get("nome_professor", ""),
-                "siglaCurso": config.get("sigla_curso", "CURSO"),
-                "nomeCursoCompleto": config.get("nome_curso", ""),
-                "nomeEscola": config.get("nome_escola", ""),
-                "emailContato": config.get("email_contato", ""),
-                "numeroQuestoes": num_total_questoes, 
-                "valorPorQuestao": valor_por_questao_display, 
-                "valorTotalProva": f"{valor_total:.2f}".replace('.', ',') 
-            }
-            self.temp_nome_arquivo_base = self.nome_input.text()
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self._handle_geracao_concluida)
+        self.worker.error.connect(self._handle_geracao_erro)
 
-            # --- ETAPA 3: Cria e Inicia a Thread ---
-            self.thread = QThread()
-            self.worker = GeradorWorker(questoes_base, num_versoes, opcoes_geracao)
-            self.worker.moveToThread(self.thread)
-
-            self.thread.started.connect(self.worker.run)
-            self.worker.finished.connect(self._handle_geracao_concluida)
-            self.worker.error.connect(self._handle_geracao_erro)
-
-            self.worker.finished.connect(self.thread.quit)
-            self.worker.finished.connect(self.worker.deleteLater)
-            self.thread.finished.connect(self.thread.deleteLater)
-            
-            self.thread.start()
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        
+        self.thread.start()
 
     def _handle_geracao_concluida(self, versoes_geradas):
         """
         Este método é chamado quando a thread termina com sucesso.
         Ele recebe os resultados e continua o processo na thread principal.
         """
-        # Pega o mesmo log_dialog que foi criado antes (você pode precisar torná-lo um self.log_dialog)
-        log_dialog = self.findChild(LogDialog)
-        if not log_dialog:
-            log_dialog = LogDialog(self) # Fallback
-            log_dialog.show()
+        if not versoes_geradas:
+            self._handle_geracao_erro("O motor gerador não retornou nenhuma versão.")
+            return
 
-        log_dialog.append_log("Variações geradas. Solicitando pasta de destino...")
+        self.log_dialog.append_log("Variações geradas. Solicitando pasta de destino...")
 
         pasta_destino = QFileDialog.getExistingDirectory(self, "Selecione a pasta para salvar as provas")
         if not pasta_destino:
-            log_dialog.append_log("Operação cancelada pelo usuário.")
+            self.log_dialog.append_log("Operação cancelada pelo usuário.")
             self.btn_gerar.setEnabled(True)
+            self.log_dialog.close()
             return
 
         try:
-            # ... (pegue os dados_pdf da UI como antes) ...
-
-            # Chama a função de criar o PDF (que é relativamente rápida)
-            criar_pdf_provas(self.temp_nome_arquivo_base, versoes_geradas, pasta_destino, self.temp_dados_pdf, log_dialog)
-            #criar_pdf_provas(nome_arquivo_base, versoes_geradas, pasta_destino, dados_pdf, log_dialog)
-
-            log_dialog.finish(success=True)
+            criar_pdf_provas(self.temp_nome_arquivo_base, versoes_geradas, pasta_destino, self.temp_dados_pdf, self.log_dialog)
+            
+            self.log_dialog.finish(success=True)
             QMessageBox.information(self, "Sucesso", f"Provas e gabarito gerados com sucesso em:\n{pasta_destino}")
         except Exception as e:
-            QMessageBox.critical(self, "Erro na Geração do PDF", f"Ocorreu um erro: {e}")
+            error_message = f"Ocorreu um erro na criação do PDF: {e}"
+            self.log_dialog.append_log(f"\n❌ ERRO: {error_message}")
+            self.log_dialog.finish(success=False)
+            QMessageBox.critical(self, "Erro na Geração do PDF", error_message)
         finally:
             self.btn_gerar.setEnabled(True)
 
     def _handle_geracao_erro(self, mensagem_erro):
         """Este método é chamado se a thread encontrar um erro."""
-        QMessageBox.critical(self, "Erro na Geração", f"Ocorreu um erro durante a geração das versões:\n{mensagem_erro}")
+        error_message = f"Ocorreu um erro durante a geração das versões:\n{mensagem_erro}"
+        self.log_dialog.append_log(f"\n❌ ERRO: {error_message}")
+        self.log_dialog.finish(success=False)
+        QMessageBox.critical(self, "Erro na Geração", error_message)
         self.btn_gerar.setEnabled(True)
-        # Fecha o log_dialog se ele existir
-        log_dialog = self.findChild(LogDialog)
-        if log_dialog:
-            log_dialog.close()
 
     def _remover_linha_tema(self, linha_widget):
         if len(self.linhas_tema) <= 1:

@@ -21,7 +21,6 @@
 \begin{center}
     {\Huge \textbf{Cardápio de Questões}}
 \end{center}
-%\vspace{1cm}
 
 <<% for questao in questoes %>>
 
@@ -38,7 +37,6 @@
             }%
         }%
     \end{center}
-    %\vspace{0.5cm}
 <<% endif %>>
 
 % --- INÍCIO DA MUDANÇA: MINIPAGE E FBOX ---
@@ -64,7 +62,7 @@
 \end{justify}
 % --- FIM DA MUDANÇA ---
 
-% Imagem
+% Imagem - CAMINHO ATUALIZADO para trabalhar com subpasta templates
 <<% if questao.imagem %>>
     \par\vspace{0.1cm}
     \par\noindent\centering
@@ -102,8 +100,6 @@
 <<% elif questao.formato_questao == 'Discursiva' %>>
     \vspace{5cm}
 <<% endif %>>
-
-%\par\vspace{0.5cm}
 
 % --- INÍCIO DA MUDANÇA: FIM DO MINIPAGE ---
 \end{minipage}%

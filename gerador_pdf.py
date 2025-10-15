@@ -2,8 +2,35 @@
 
 import os
 import subprocess
+import shutil
 from jinja2 import Environment, FileSystemLoader
 from PyQt5.QtWidgets import QApplication
+
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), 'templates')
+
+def copiar_imagens_para_destino(pasta_destino, log_dialog=None):
+    """Copia as imagens da pasta templates para a pasta de destino"""
+    def log_message(message):
+        if log_dialog:
+            log_dialog.append_log(message)
+        else:
+            print(message)
+    
+    imagens = ['logo-iff.png', 'tabela_dados_aluno.png']
+    
+    for imagem in imagens:
+        origem = os.path.join(TEMPLATES_DIR, imagem)
+        destino = os.path.join(pasta_destino, imagem)
+        
+        if os.path.exists(origem):
+            try:
+                shutil.copy2(origem, destino)
+                log_message(f"✅ Imagem copiada: {imagem}")
+            except Exception as e:
+                log_message(f"⚠️  Erro ao copiar {imagem}: {e}")
+        else:
+            log_message(f"⚠️  Imagem não encontrada: {origem}")
+
 
 def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerais_pdf, log_dialog=None):
     
@@ -13,8 +40,12 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
         else:
             print(message)
 
+    # ⭐ ADICIONE ESTA LINHA:
+    log_message("📁 Copiando imagens para a pasta de destino...")
+    copiar_imagens_para_destino(pasta_destino, log_dialog)
+
     template_env = Environment(
-        loader=FileSystemLoader(searchpath="."),
+        loader=FileSystemLoader(searchpath=TEMPLATES_DIR),  # ← DEVE SER TEMPLATES_DIR
         block_start_string='<<%',
         block_end_string='%>>',
         variable_start_string='<<',
@@ -29,8 +60,9 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
     try:
         template_prova = template_env.get_template('modelo_prova.tex')
         template_gabarito = template_env.get_template('modelo_gabarito.tex')
+        log_message(f"📄 Templates carregados de: {TEMPLATES_DIR}")  # ← ADICIONE ESTA LINHA
     except Exception as e:
-        raise FileNotFoundError(f"Não foi possível encontrar um arquivo de template (.tex). Erro: {e}")
+        raise FileNotFoundError(f"Não foi possível encontrar os templates em {TEMPLATES_DIR}. Erro: {e}")
 
     todos_gabaritos = []
 
@@ -133,6 +165,7 @@ def gerar_pdf_cardapio(questoes, caminho_saida, template_file, contexto_extra, l
     """
     Renderiza o template do cardápio, usando um LogDialog para manter a UI responsiva.
     """
+  
     def log_message(message):
         """ Helper que envia mensagens para o log e atualiza a UI. """
         if log_dialog:
@@ -140,64 +173,78 @@ def gerar_pdf_cardapio(questoes, caminho_saida, template_file, contexto_extra, l
             QApplication.processEvents() # <<< A CHAVE PARA NÃO TRAVAR
         else:
             print(message)
-
-    # ... (o resto da função continua exatamente igual à que eu te enviei antes)
-    if not questoes:
-        raise ValueError("A lista de questões para o cardápio está vazia.")
-
-    template_env = Environment(
-    loader=FileSystemLoader(searchpath="."),
-    block_start_string='<<%',
-    block_end_string='%>>',
-    variable_start_string='<<',
-    variable_end_string='>>',
-    comment_start_string='(*',
-    comment_end_string='*)',
-    autoescape=False
-    )
-    
-    if contexto_extra:
-        template_env.globals.update(contexto_extra)
-
+            
     try:
-        template = template_env.get_template(template_file)
+        # ⭐ NOVO: Inicia nova geração de cache para o cardápio
+        from motor_gerador import iniciar_nova_geracao_cache
+        iniciar_nova_geracao_cache("cardapio_questoes")
+        
+        log_message("Iniciando a geração do cardápio de questões com filtros...")
+
+        # ... (o resto da função continua exatamente igual à que eu te enviei antes)
+        if not questoes:
+            raise ValueError("A lista de questões para o cardápio está vazia.")
+
+        template_env = Environment(
+            loader=FileSystemLoader(searchpath="."),
+            block_start_string='<<%',
+            block_end_string='%>>',
+            variable_start_string='<<',
+            variable_end_string='>>',
+            comment_start_string='(*',
+            comment_end_string='*)',
+            autoescape=False
+        )
+        
+        if contexto_extra:
+            template_env.globals.update(contexto_extra)
+
+        try:
+            template = template_env.get_template(template_file)
+        except Exception as e:
+            raise FileNotFoundError(f"Não foi possível encontrar o template do cardápio '{template_file}'. Erro: {e}")
+
+        log_message("Iniciando a geração do PDF do cardápio...")
+        
+        output_tex = template.render(questoes=questoes)
+        
+        nome_base_arquivo = os.path.splitext(os.path.basename(caminho_saida))[0]
+        pasta_destino = os.path.dirname(caminho_saida)
+        caminho_tex = os.path.join(pasta_destino, f"{nome_base_arquivo}.tex")
+        
+        with open(caminho_tex, 'w', encoding='utf-8') as f:
+            f.write(output_tex)
+        log_message("Arquivo .tex do cardápio criado.")
+        
+        log_message("Compilando PDF do cardápio (isso pode levar um momento)...")
+        comando = ['xelatex', '-interaction=nonstopmode', '-output-directory', pasta_destino, caminho_tex]
+        
+        process = None
+        try:
+            for run_count in range(2):
+                process = subprocess.run(comando, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+                if process.returncode != 0:
+                    process.check_returncode()
+            log_message("✅ PDF do cardápio gerado com sucesso.")
+        except subprocess.CalledProcessError:
+            log_message(f"❌ Erro ao compilar o PDF do cardápio.")
+            if process:
+                log_message("--- Saída do Compilador LaTeX (stdout) ---")
+                log_message(process.stdout)
+            raise Exception(f"Erro na compilação do LaTeX. Verifique o log.")
+        finally:
+            log_message("Limpando arquivos temporários...")
+            for ext in ['.tex', '.aux', '.log', '.out']:
+                try:
+                    arquivo_para_deletar = os.path.join(pasta_destino, nome_base_arquivo + ext)
+                    if os.path.exists(arquivo_para_deletar):
+                        os.remove(arquivo_para_deletar)
+                except OSError: 
+                    pass
+            log_message("Limpeza concluída.")
+            
     except Exception as e:
-        raise FileNotFoundError(f"Não foi possível encontrar o template do cardápio '{template_file}'. Erro: {e}")
-
-    log_message("Iniciando a geração do PDF do cardápio...")
-    
-    output_tex = template.render(questoes=questoes)
-    
-    nome_base_arquivo = os.path.splitext(os.path.basename(caminho_saida))[0]
-    pasta_destino = os.path.dirname(caminho_saida)
-    caminho_tex = os.path.join(pasta_destino, f"{nome_base_arquivo}.tex")
-    
-    with open(caminho_tex, 'w', encoding='utf-8') as f:
-        f.write(output_tex)
-    log_message("Arquivo .tex do cardápio criado.")
-    
-    log_message("Compilando PDF do cardápio (isso pode levar um momento)...")
-    comando = ['xelatex', '-interaction=nonstopmode', '-output-directory', pasta_destino, caminho_tex]
-    
-    process = None
-    try:
-        for run_count in range(2):
-            process = subprocess.run(comando, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-            if process.returncode != 0:
-                process.check_returncode()
-        log_message("✅ PDF do cardápio gerado com sucesso.")
-    except subprocess.CalledProcessError:
-        log_message(f"❌ Erro ao compilar o PDF do cardápio.")
-        if process:
-            log_message("--- Saída do Compilador LaTeX (stdout) ---")
-            log_message(process.stdout)
-        raise Exception(f"Erro na compilação do LaTeX. Verifique o log.")
-    finally:
-        log_message("Limpando arquivos temporários...")
-        for ext in ['.tex', '.aux', '.log', '.out']:
-            try:
-                arquivo_para_deletar = os.path.join(pasta_destino, nome_base_arquivo + ext)
-                if os.path.exists(arquivo_para_deletar):
-                    os.remove(arquivo_para_deletar)
-            except OSError: pass
-        log_message("Limpeza concluída.")
+        log_message(f"ERRO ao gerar cardápio: {e}")
+        return False, f"Ocorreu um erro: {e}"
+        
+    return True, "Cardápio gerado com sucesso!"

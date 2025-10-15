@@ -176,7 +176,7 @@ def gerar_pdf_cardapio(questoes, caminho_saida, template_file, contexto_extra, l
             
     try:
         # ⭐ NOVO: Inicia nova geração de cache para o cardápio
-        from motor_gerador import iniciar_nova_geracao_cache
+        from motor_gerador.cache_manager import iniciar_nova_geracao_cache
         iniciar_nova_geracao_cache("cardapio_questoes")
         
         log_message("Iniciando a geração do cardápio de questões com filtros...")
@@ -186,7 +186,7 @@ def gerar_pdf_cardapio(questoes, caminho_saida, template_file, contexto_extra, l
             raise ValueError("A lista de questões para o cardápio está vazia.")
 
         template_env = Environment(
-            loader=FileSystemLoader(searchpath="."),
+            loader=FileSystemLoader(searchpath=TEMPLATES_DIR),  # ← DEVE SER TEMPLATES_DIR
             block_start_string='<<%',
             block_end_string='%>>',
             variable_start_string='<<',
@@ -200,7 +200,7 @@ def gerar_pdf_cardapio(questoes, caminho_saida, template_file, contexto_extra, l
             template_env.globals.update(contexto_extra)
 
         try:
-            template = template_env.get_template(template_file)
+            template = template_env.get_template('modelo_cardapio.tex')
         except Exception as e:
             raise FileNotFoundError(f"Não foi possível encontrar o template do cardápio '{template_file}'. Erro: {e}")
 

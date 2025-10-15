@@ -20,7 +20,7 @@ from .configuracoes_dialog import ConfiguracoesDialog
 from .selecao_modo_geracao import SelecaoModoGeracaoDialog
 from .filtro_cardapio_dialog import FiltroCardapioDialog
 from .log_dialog import LogDialog
-import motor_gerador
+from motor_gerador.core import gerar_cardapio_questoes
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
         log_dialog = LogDialog(self)
         log_dialog.show()
         try:
-            sucesso, mensagem = motor_gerador.gerar_cardapio_questoes(caminho_salvar, disciplina_id, tema, log_dialog)
+            sucesso, mensagem = gerar_cardapio_questoes(caminho_salvar, disciplina_id, tema, log_dialog)
             log_dialog.finish(success=sucesso)
             if sucesso:
                 QMessageBox.information(self, "Sucesso", mensagem)

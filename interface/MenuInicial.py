@@ -56,38 +56,6 @@ class MenuInicialWindow(QWidget):
     def sizeHint(self):
         """Informa à MainWindow qual o tamanho ideal desta tela."""
         return QSize(480, 400)
-
-    '''def _aplicar_estilos(self):
-        """Define e aplica o QSS para o estilo do menu original."""
-        style = """
-        #TituloMenu {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2c3e50; 
-            margin-bottom: 28px;
-            padding-bottom: 5px;
-            border-bottom: 2px solid #3498db; 
-        }
-
-        QPushButton {
-            background-color: #3498db; 
-            color: white;
-            border: none;
-            border-radius: 8px; 
-            padding: 12px 5px;
-            font-size: 26px; 
-            font-weight: bold;
-        }
-
-        QPushButton:hover {
-            background-color: #2980b9;
-        }
-        
-        QPushButton:pressed {
-            background-color: #1a5276;
-        }
-        """
-        self.setStyleSheet(style)'''
     
     def _aplicar_estilos(self):
         """Aplica estilo do menu inicial."""

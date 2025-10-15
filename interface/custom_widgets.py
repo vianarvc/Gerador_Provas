@@ -161,6 +161,62 @@ class EstilosApp:
         # Aplica o tamanho
         EstilosApp.aplicar_tamanho(botao, font_size, padding, min_height, min_width)
 
+    @staticmethod
+    def aplicar_estilo_janela_principal(janela):
+        """Aplica o estilo global da QMainWindow, incluindo a barra superior."""
+        style = """
+            QMainWindow { background-color: #f7f7ff; }
+            
+            /* A barra superior unificada */
+            #TopBar { 
+                background-color: #001f3f; 
+                color: white; 
+                border: none;
+                padding: 2px;
+                spacing: 5px;
+            }
+
+            /* Botão de VOLTAR (seta) com fonte maior */
+            #VoltarToolButton {
+                color: white;
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 22px;
+                font-weight: bold;
+            }
+            #VoltarToolButton:hover, #VoltarToolButton:pressed {
+                background-color: #001a33;
+            }
+
+            /* Botões de MENU (Dados, etc.) com fonte normal */
+            #MenuToolButton {
+                color: white;
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            #MenuToolButton::menu-indicator { image: none; }
+            #MenuToolButton:hover, #MenuToolButton:pressed {
+                background-color: #001a33;
+            }
+
+            /* O menu suspenso que aparece */
+            QMenu { 
+                background-color: #001f3f; 
+                color: white; 
+                border: 1px solid #001a33; 
+            }
+            QMenu::item:selected { 
+                background-color: #4169E1; 
+            }
+        """
+        janela.setStyleSheet(style)
+
 class MeuLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)

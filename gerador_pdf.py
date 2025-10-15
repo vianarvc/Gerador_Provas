@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import QApplication
 def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerais_pdf, log_dialog=None):
     
     def log_message(message):
-        """ Helper para enviar mensagens para o log ou para o console """
         if log_dialog:
             log_dialog.append_log(message)
         else:
@@ -36,31 +35,47 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
     todos_gabaritos = []
 
     log_message(f"Iniciando compilação de {len(versoes_geradas)} versão(ões)...")
-    for i, versao in enumerate(versoes_geradas):
-        log_message(f"\nGerando arquivos para a Versão {i+1}...")
-        nome_base_arquivo = f"{nome_avaliacao.replace(' ', '_')}_v{i+1}"
+    
+    # --- INÍCIO DA CORREÇÃO PRINCIPAL ---
+    
+    # O loop agora itera sobre a nova estrutura de dados (lista de dicionários)
+    for versao_data in versoes_geradas:
+        
+        # 1. Desempacota os dados corretamente, resolvendo o erro 'str' object has no attribute 'get'
+        letra_versao = versao_data.get('letra', 'N/A')
+        questoes_da_versao = versao_data.get('questoes', [])
+        
+        log_message(f"\nGerando arquivos para o Caderno {letra_versao}...")
+        
+        # 2. Usa a nomenclatura que você pediu
+        nome_base_arquivo = f"{nome_avaliacao.replace(' ', '_')}_caderno_{letra_versao}"
         caminho_tex = os.path.join(pasta_destino, f"{nome_base_arquivo}.tex")
         
+        # 3. A lógica do gabarito agora itera sobre a lista de questões correta
         itens_gabarito_versao = []
-        for q in versao:
+        for q in questoes_da_versao:
             itens_gabarito_versao.append({
                 "resposta": str(q.get("gabarito", "?")),
                 "id": q.get("id_base", "N/A"),
                 "tema": q.get("tema", "N/A")
             })
-        todos_gabaritos.append({ "versao": f"Versão {i+1}", "itens": itens_gabarito_versao })
+        todos_gabaritos.append({ "versao": f"Caderno {letra_versao}", "itens": itens_gabarito_versao })
         
+        # 4. Prepara os dados para o template da prova
         dados_template = dados_gerais_pdf.copy()
-        dados_template['questoes'] = versao
+        dados_template['questoes'] = questoes_da_versao
+        
+        # <<< CORREÇÃO CRUCIAL: Adiciona a letra da versão para o cabeçalho >>>
+        dados_template['versao'] = letra_versao
+
+        # --- FIM DA CORREÇÃO PRINCIPAL ---
 
         with open(caminho_tex, 'w', encoding='utf-8') as f:
             f.write(template_prova.render(dados_template))
-        log_message(f"Arquivo .tex da Versão {i+1} criado.")
-        log_message(f"Compilando PDF da Versão {i+1} (isso pode levar um momento)...")
+        log_message(f"Arquivo .tex do Caderno {letra_versao} criado.")
+        log_message(f"Compilando PDF do Caderno {letra_versao} (isso pode levar um momento)...")
 
         comando = ['xelatex', '-interaction=nonstopmode', '-output-directory', pasta_destino, caminho_tex]
-        """nome_base_arquivo_tex = os.path.basename(caminho_tex)
-        comando = ['xelatex', '-interaction=nonstopmode', nome_base_arquivo_tex]"""
         
         process = None
         try:
@@ -68,14 +83,13 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
                 process = subprocess.run(comando, capture_output=True, text=True, encoding='utf-8', errors='ignore')
                 if process.returncode != 0:
                     process.check_returncode()
-            log_message(f"✅ PDF da Versão {i+1} gerado com sucesso.")
+            log_message(f"✅ PDF do Caderno {letra_versao} gerado com sucesso.")
 
         except subprocess.CalledProcessError:
-            log_message(f"❌ Erro ao compilar o PDF da Versão {i+1}.")
+            log_message(f"❌ Erro ao compilar o PDF do Caderno {letra_versao}.")
             if process:
                 log_message("--- Saída do Compilador LaTeX (stdout) ---")
                 log_message(process.stdout)
-                log_message("------------------------------------------")
             raise Exception(f"Erro na compilação do LaTeX. Verifique a janela de log.")
 
     if todos_gabaritos:
@@ -83,7 +97,6 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
         caminho_tex_gabarito = os.path.join(pasta_destino, f"{nome_avaliacao.replace(' ', '_')}_GABARITO.tex")
         with open(caminho_tex_gabarito, 'w', encoding='utf-8') as f:
             f.write(template_gabarito.render({"versoes": todos_gabaritos}))
-        
         comando_gabarito = ['xelatex', '-interaction=nonstopmode', '-output-directory', pasta_destino, caminho_tex_gabarito]
         try:
             for _ in range(2):
@@ -91,16 +104,17 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
             log_message("✅ PDF do Gabarito gerado com sucesso.")
         except subprocess.CalledProcessError as e:
             log_message("❌ Erro ao compilar o PDF do Gabarito.")
-            log_message("--- Saída do Compilador LaTeX (stdout) ---")
-            log_message(e.stdout)
-            log_message("------------------------------------------")
+            log_message(f"--- Saída do Compilador LaTeX ---\n{e.stdout}\n--------------------")
             raise Exception("Erro na compilação do gabarito. Verifique a janela de log.")
 
     if delete_temp_files:
         log_message("\nLimpando arquivos temporários...")
-        extensoes_para_limpar = ['.tex', '.aux', '.log', '.out']
-        for i in range(len(versoes_geradas)):
-            nome_base_arquivo = f"{nome_avaliacao.replace(' ', '_')}_v{i+1}"
+        extensoes_para_limpar = ['.aux', '.log', '.out', '.tex']
+        
+        # --- CORREÇÃO DA LIMPEZA: Usa a mesma lógica de nomenclatura ---
+        for versao_data in versoes_geradas:
+            letra_versao = versao_data.get('letra', 'N/A')
+            nome_base_arquivo = f"{nome_avaliacao.replace(' ', '_')}_caderno_{letra_versao}"
             for ext in extensoes_para_limpar:
                 arquivo_para_deletar = os.path.join(pasta_destino, nome_base_arquivo + ext)
                 if os.path.exists(arquivo_para_deletar):
@@ -114,9 +128,7 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
                 try: os.remove(arquivo_gabarito_para_deletar)
                 except OSError: pass
         log_message("Limpeza concluída.")
-
-# (Em gerador_pdf.py, substitua a função que criamos anteriormente)
-
+        
 def gerar_pdf_cardapio(questoes, caminho_saida, template_file, contexto_extra, log_dialog=None):
     """
     Renderiza o template do cardápio, usando um LogDialog para manter a UI responsiva.

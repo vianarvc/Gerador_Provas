@@ -4,10 +4,10 @@ import os, re
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
     QPushButton, QFileDialog, QScrollArea, QMessageBox, QCheckBox,
-    QGroupBox, QGridLayout, QDesktopWidget, QTextEdit, QListWidget
+    QGroupBox, QGridLayout, QDesktopWidget, QTextEdit, QListWidget, QApplication
 )
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QThread
 
 from database import (
     obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, 
@@ -20,6 +20,7 @@ from .custom_widgets import (
     NoScrollComboBox, NoScrollSpinBox, NoScrollDoubleSpinBox, MeuCheckBox, MeuBotao
 )
 from .log_dialog import LogDialog
+from .worker_gerador import GeradorWorker
 
 class GeradorPorIdScreen(QWidget):
     voltar_pressed = pyqtSignal()
@@ -229,93 +230,133 @@ class GeradorPorIdScreen(QWidget):
 
         self._atualizar_contadores()
 
-    # --- MUDANÇA 3: `_gerar_prova` agora usa a lista de questões ativas ---
+
     def _gerar_prova(self):
-        if not self.questoes_ativas_verificadas:
-            QMessageBox.warning(self, "Erro", "Nenhuma questão ATIVA foi verificada e carregada. Verifique os IDs.")
-            return
-
-        log_dialog = LogDialog(self)
-        log_dialog.show()
-        self.btn_gerar.setEnabled(False)
-        num_total_questoes = len(self.questoes_ativas_verificadas)
-
-        if num_total_questoes == 0:
-            QMessageBox.warning(self, "Erro", "Nenhuma questão foi selecionada.")
+        # --- ETAPA 1: Coleta de Dados e Validação (Sem alterações) ---
+        ids_texto = self.ids_input.toPlainText().strip()
+        if not ids_texto:
+            QMessageBox.warning(self, "Atenção", "Por favor, insira pelo menos um ID de questão.")
             return
         
         try:
-            config = carregar_configuracoes()
-            num_versoes = self.versoes_spinbox.value()
-            log_dialog.append_log(f"Iniciando geração de {num_versoes} versão(ões) com {len(self.questoes_ativas_verificadas)} questões pré-definidas.")
+            lista_ids = [int(id_str.strip()) for id_str in ids_texto.split(',')]
+        except ValueError:
+            QMessageBox.critical(self, "Erro de Formato", "IDs inválidos. Por favor, insira apenas números separados por vírgula.")
+            return
 
-            log_dialog.append_log("Gerando variações das questões para cada versão...")
+        questoes_base = buscar_questoes_por_ids(lista_ids)
+        if not questoes_base:
+            QMessageBox.critical(self, "Erro", "Nenhuma das questões com os IDs fornecidos foi encontrada no banco de dados.")
+            return
 
-            # --- LÓGICA DE VALOR ADICIONADA DE VOLTA ---
-            valor_total = self.valor_total_spinbox.value()
-            valor_por_questao = 0.0
-            valor_por_questao_display = "Vide a Questão"
-            if self.check_distribuir_valor.isChecked():
-                valor_por_questao = valor_total / num_total_questoes if num_total_questoes > 0 else 0
-                valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
-            
-            opcoes_geracao = {
-                "gabarito": {
-                    "distribuir": self.check_distribuir.isChecked(),
-                    "rotacao": self.rotacao_spinbox.value(),
-                    "embaralhar_questoes": self.check_embaralhar.isChecked()
-                },
-                "pontuacao": {
-                    "valor_total": valor_total, 
-                    "valor_por_questao": valor_por_questao
-                }
-            }
-            
-            versoes_geradas = gerar_versoes_prova(self.questoes_ativas_verificadas, num_versoes, opcoes_geracao)
-            if not versoes_geradas:
-                raise Exception("Não foi possível gerar as versões da prova (motor retornou vazio).")
+        self.log_dialog = LogDialog(self)
+        self.log_dialog.show()
+        self.btn_gerar.setEnabled(False)
+        self.log_dialog.append_log(f"{len(questoes_base)} questões encontradas.")
+        self.log_dialog.append_log("Gerando variações... Este processo pode levar um momento.")
+        QApplication.processEvents()
 
-            log_dialog.append_log("Variações geradas. Solicitando pasta de destino...")
-            pasta_destino = QFileDialog.getExistingDirectory(self, "Selecione a pasta para salvar as provas")
-            
-            if not pasta_destino:
-                raise Exception("Nenhuma pasta de destino selecionada. Operação cancelada.")
-            
-            # >>> ADICIONE ESTA LINHA PARA PEGAR O TEXTO CORRETO <<<
-            disciplina_selecionada = self.disciplina_combo.currentText()
-
-                # Validação para garantir que uma disciplina foi selecionada
-            if disciplina_selecionada == "-- Selecione --":
-                QMessageBox.warning(self, "Erro", "Por favor, selecione uma disciplina para a prova.")
-                return
-
-            dados_pdf = {
-                "nomeDisciplina": disciplina_selecionada, 
-                "tipoExame": "AVALIAÇÃO", 
-                "bimestre": self.bimestre_input.text(), # Pega o bimestre da tela
-                "nomeProfessor": config.get("nome_professor", ""), # Pega o professor das configs
-                # ... o resto dos seus campos continua igual
-                "siglaCurso": config.get("sigla_curso", "CURSO"),
-                "nomeCursoCompleto": config.get("nome_curso", ""),
-                "nomeEscola": config.get("nome_escola", ""),
-                "emailContato": config.get("email_contato", ""),
-                "nomeescola": config.get("nome_escola", ""),
-                "numeroQuestoes": len(self.questoes_ativas_verificadas),
-                "valorPorQuestao": valor_por_questao_display,
-                "valorTotalProva": f"{valor_total:.2f}".replace('.', ',')
-            }
-            
-            nome_arquivo_base = self.nome_input.text()
-            criar_pdf_provas(nome_arquivo_base, versoes_geradas, pasta_destino, dados_pdf, log_dialog)
-            
-            log_dialog.finish(success=True)
-            QMessageBox.information(self, "Sucesso", f"Provas e gabarito gerados com sucesso em:\n{pasta_destino}")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Erro na Geração", f"Ocorreu um erro: {e}")
+        # --- ETAPA 2: Prepara TODOS os dados para a Geração (LÓGICA CORRIGIDA) ---
+        config = carregar_configuracoes()
+        num_versoes = self.versoes_spinbox.value()
         
+        # 1. Define o número total de questões
+        num_total_questoes = len(questoes_base)
+
+        # 2. Lê os valores da interface e calcula os dados da prova
+        valor_total = self.valor_total_spinbox.value()
+        valor_por_questao = 0.0
+        valor_por_questao_display = ""
+
+        if self.check_distribuir_valor.isChecked():
+            if num_total_questoes > 0:
+                valor_por_questao = valor_total / num_total_questoes
+                valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
+        
+        # 3. Cria o dicionário de opções para o MOTOR GERADOR com os dados corretos
+        opcoes_geracao = {
+            "gabarito": {
+                "distribuir": self.check_distribuir.isChecked(),
+                "rotacao": self.rotacao_spinbox.value(),
+                "embaralhar_questoes": self.check_embaralhar.isChecked()
+            },
+            "pontuacao": {
+                "valor_total": valor_total,
+                "valor_por_questao": valor_por_questao,
+                "mostrar_valor_individual": self.check_distribuir_valor.isChecked()
+            }
+        }
+        
+        # 4. Cria o dicionário de dados para o GERADOR DE PDF com os dados corretos
+        self.temp_dados_pdf = {
+            "nomeDisciplina": self.disciplina_combo.currentText() if self.disciplina_combo.currentIndex() > 0 else "Seleção por ID",
+            "tipoExame": "AVALIAÇÃO",
+            "bimestre": self.bimestre_input.text(),
+            "nomeProfessor": config.get("nome_professor", ""),
+            "siglaCurso": config.get("sigla_curso", ""),
+            "nomeCursoCompleto": config.get("nome_curso", ""),
+            "nomeEscola": config.get("nome_escola", ""),
+            "emailContato": config.get("email_contato", ""),
+            "numeroQuestoes": num_total_questoes,
+            "valorPorQuestao": valor_por_questao_display,
+            "valorTotalProva": f"{valor_total:.2f}".replace('.', ',')
+        }
+        self.temp_nome_arquivo_base = self.nome_input.text()
+
+        # --- ETAPA 3: Cria e Inicia a Thread (Sem alterações) ---
+        self.thread = QThread()
+        self.worker = GeradorWorker(questoes_base, num_versoes, opcoes_geracao)
+        self.worker.moveToThread(self.thread)
+        
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self._handle_geracao_concluida)
+        self.worker.error.connect(self._handle_geracao_erro)
+        
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        
+        self.thread.start()
+
+    def _handle_geracao_concluida(self, versoes_geradas):
+        """
+        Executa quando a geração em segundo plano termina com sucesso.
+        """
+        if not versoes_geradas:
+            self._handle_geracao_erro("O motor gerador não retornou nenhuma versão.")
+            return
+
+        self.log_dialog.append_log("Variações geradas. Solicitando pasta de destino...")
+        
+        pasta_destino = QFileDialog.getExistingDirectory(self, "Selecione a pasta para salvar as provas")
+        if not pasta_destino:
+            self.log_dialog.append_log("Operação cancelada pelo usuário.")
+            self.btn_gerar.setEnabled(True)
+            self.log_dialog.close()
+            return
+        
+        try:
+            criar_pdf_provas(self.temp_nome_arquivo_base, versoes_geradas, pasta_destino, self.temp_dados_pdf, self.log_dialog)
+            
+            self.log_dialog.finish(success=True)
+            QMessageBox.information(self, "Sucesso", f"Provas e gabarito gerados com sucesso em:\n{pasta_destino}")
+        except Exception as e:
+            error_message = f"Ocorreu um erro na criação do PDF: {e}"
+            self.log_dialog.append_log(f"\n❌ ERRO: {error_message}")
+            self.log_dialog.finish(success=False)
+            QMessageBox.critical(self, "Erro na Geração do PDF", error_message)
         finally:
             self.btn_gerar.setEnabled(True)
+
+    def _handle_geracao_erro(self, mensagem_erro):
+        """
+        Executa se a geração em segundo plano falhar.
+        """
+        error_message = f"Ocorreu um erro durante a geração das variações: {mensagem_erro}"
+        self.log_dialog.append_log(f"\n❌ ERRO: {error_message}")
+        self.log_dialog.finish(success=False)
+        QMessageBox.critical(self, "Erro na Geração", error_message)
+        self.btn_gerar.setEnabled(True)
 
     def sizeHint(self):
         """Informa à MainWindow qual o tamanho ideal para esta tela."""

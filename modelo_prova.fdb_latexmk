@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1760058264.88106 "d:/Documentos/Projetos_Python/GeradorProva/modelo_prova.tex" "modelo_prova.pdf" "modelo_prova" 1760058265.47218 2
+["pdflatex"] 1760490928.94079 "d:/Documentos/Projetos_Python/GeradorProva/modelo_prova.tex" "modelo_prova.pdf" "modelo_prova" 1760490929.4515 2
   "C:/Users/viana/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1757608881 24225046 53d44e37a925422bc97a15a3c22741db ""
   "C:/Users/viana/AppData/Local/Programs/MiKTeX/fonts/tfm/public/cm/cmr12.tfm" 1136765053 1288 655e228510b4c2a1abe905c368440826 ""
   "C:/Users/viana/AppData/Local/Programs/MiKTeX/tex/latex/base/article.cls" 1705273579 20144 147463a6a579f4597269ef9565205cfe ""
@@ -8,9 +8,9 @@
   "C:/Users/viana/AppData/Local/Programs/MiKTeX/tex/latex/l3backend/l3backend-pdftex.def" 1704400941 30006 57b07afb710ee2f649c65cfbafda39c1 ""
   "C:/Users/viana/AppData/Local/Programs/MiKTeX/tex/latex/l3kernel/expl3.sty" 1704401523 6565 189a69b081829349174d0a0f0ab9e4d5 ""
   "C:/Users/viana/AppData/Local/Programs/MiKTeX/tex/latex/l3packages/xparse/xparse.sty" 1696961617 9327 c30c00c0072edba199ede5889311aaa9 ""
-  "d:/Documentos/Projetos_Python/GeradorProva/modelo_prova.tex" 1760058263 8366 c2781e308146cd514a1577c8a78361be ""
-  "modelo_prova.aux" 1760058256 32 3985256e7290058c681f74d7a3565a19 "pdflatex"
-  "modelo_prova.tex" 1760058263 8366 c2781e308146cd514a1577c8a78361be ""
+  "d:/Documentos/Projetos_Python/GeradorProva/modelo_prova.tex" 1760490927 8366 9f6a682daa9ea17ea5157ecfdbce4fa6 ""
+  "modelo_prova.aux" 1760490920 32 3985256e7290058c681f74d7a3565a19 "pdflatex"
+  "modelo_prova.tex" 1760490927 8366 9f6a682daa9ea17ea5157ecfdbce4fa6 ""
   (generated)
   "modelo_prova.aux"
   "modelo_prova.log"

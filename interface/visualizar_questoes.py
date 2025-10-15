@@ -5,7 +5,7 @@ import json
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QPushButton,
     QTextEdit, QScrollArea, QMessageBox, QDesktopWidget, QStackedWidget,
-    QComboBox
+    QComboBox, QMenu, QInputDialog
 )
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt, pyqtSignal, QSize  # --- MUDANÇA 1: Novas importações ---
@@ -13,7 +13,8 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize  # --- MUDANÇA 1: Novas importa�
 # Importações de funções do banco de dados (sem alteração)
 from database import (
     obter_disciplinas, obter_disciplina_id_por_nome, obter_temas,
-    obter_questoes_por_tema, excluir_questao, salvar_ordem_temas, obter_disciplina_nome_por_id
+    obter_questoes_por_tema, excluir_questao, salvar_ordem_temas, 
+    obter_disciplina_nome_por_id, renomear_tema
 )
 # A importação do CadastroQuestaoWindow não é mais necessária aqui
 # from .cadastro_questao import CadastroQuestaoWindow
@@ -78,6 +79,9 @@ class VisualizarQuestoesScreen(QWidget):
         label_temas = QLabel("<h3>Temas</h3>")
         label_temas.setObjectName("TituloSecundario")
         self.lista_temas = QListWidget()
+        self.lista_temas.setMinimumWidth(300)
+        self.lista_temas.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.lista_temas.customContextMenuRequested.connect(self._abrir_menu_contexto_tema)
         self.lista_temas.setDragDropMode(QListWidget.InternalMove)
         self.lista_temas.model().rowsMoved.connect(self._salvar_ordem_atual_temas)
         self.lista_temas.setSortingEnabled(False)
@@ -347,3 +351,41 @@ class VisualizarQuestoesScreen(QWidget):
         # Se já estivermos na tela de listagem, não há para onde voltar internamente.
         # Retorna False para que a MainWindow possa assumir o controle.
         return False
+    
+    # Adicione este novo método à classe VisualizarQuestoesScreen
+    def _abrir_menu_contexto_tema(self, pos):
+        """
+        Abre o menu de contexto ao clicar com o botão direito na lista de temas.
+        """
+        item = self.lista_temas.itemAt(pos)
+        if not item:
+            return # Se o clique foi em uma área vazia, não faz nada
+
+        nome_antigo = item.text()
+
+        # Cria o menu e adiciona a ação de renomear
+        menu = QMenu()
+        acao_renomear = menu.addAction("Renomear Tema...")
+
+        # Mostra o menu na posição do cursor e aguarda a escolha do usuário
+        acao_selecionada = menu.exec_(self.lista_temas.mapToGlobal(pos))
+
+        # Se a ação de renomear foi clicada
+        if acao_selecionada == acao_renomear:
+            # Pede ao usuário o novo nome usando um diálogo simples
+            nome_novo, ok = QInputDialog.getText(self, 
+                                                "Renomear Tema", 
+                                                f"Digite o novo nome para '{nome_antigo}':",
+                                                text=nome_antigo)
+
+            # Se o usuário clicou "OK" e o nome é válido
+            if ok and nome_novo and nome_novo.strip():
+                nome_novo = nome_novo.strip()
+                if nome_novo != nome_antigo:
+                    # Chama a função do banco de dados para fazer a mágica
+                    if renomear_tema(nome_antigo, nome_novo):
+                        QMessageBox.information(self, "Sucesso", "Tema renomeado com sucesso em todas as questões.")
+                        # Atualiza a lista de temas na tela para refletir a mudança
+                        self._disciplina_selecionada()
+                    else:
+                        QMessageBox.critical(self, "Erro", "Não foi possível renomear o tema no banco de dados.")

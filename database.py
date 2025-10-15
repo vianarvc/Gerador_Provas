@@ -5,6 +5,8 @@ import json
 import zipfile
 import os
 import shutil
+import uuid  
+from datetime import datetime
 
 DB_NAME = 'banco_questoes.db'
 SETTINGS_FILE = 'settings.json'
@@ -67,7 +69,8 @@ def init_db():
     check_and_add_column('disciplina_id', 'INTEGER REFERENCES disciplinas(id)')
     check_and_add_column('fonte', 'TEXT')
     check_and_add_column('tipo_resposta', 'TEXT') 
-    check_and_add_column('parametros_tabela_json', 'TEXT') # <<< ADICIONE ESTA LINHA
+    check_and_add_column('parametros_tabela_json', 'TEXT') 
+    check_and_add_column('grupo_importacao', 'TEXT')
 
     conn.commit()
     conn.close()
@@ -376,8 +379,10 @@ def exportar_base_de_dados(caminho_destino):
 
 def importar_base_de_dados(caminho_origem):
     """
-    Descompacta o backup e insere as questões e imagens no DB atual como novos IDs.
+    Descompacta o backup e mescla as questões e imagens no DB atual,
+    evitando duplicatas e conflitos de imagem.
     """
+    # ... (código de descompactação inicial, sem alterações) ...
     caminho_temp = 'temp_import_data'
     temp_db_path = os.path.join(caminho_temp, os.path.basename(DB_NAME))
     temp_img_dir = os.path.join(caminho_temp, os.path.basename(IMAGE_DIR))
@@ -402,86 +407,96 @@ def importar_base_de_dados(caminho_origem):
         conn_temp = sqlite3.connect(temp_db_path)
         cursor_temp = conn_temp.cursor()
         
-        # 1. Copia Disciplinas (para garantir que IDs de FKs existam)
+        # Cria uma tag de importação única para esta operação
+        import_tag = f"Importado em {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+
+        # 1. Copia Disciplinas (sua lógica original, que está correta)
         cursor_temp.execute("SELECT nome FROM disciplinas")
-        disciplinas_importar = cursor_temp.fetchall()
-        for row in disciplinas_importar:
-            salvar_disciplina(row[0]) # Usa a função que insere ou retorna o ID se já existir
+        for row in cursor_temp.fetchall():
+            # A função salvar_disciplina/obter_disciplina_id_por_nome já lida com duplicatas
+            obter_disciplina_id_por_nome(row[0], criar_se_nao_existir=True)
+
+        # 2. Prepara a inserção de Questões de forma segura
         
-        # 2. Insere as Questões
-        # Obter a lista de colunas dinamicamente (para incluir as novas: disciplina_id, fonte, tipo_resposta)
+        # Pega as colunas do DB de backup
         cursor_temp.execute("PRAGMA table_info(questoes)")
-        colunas_temp = [info[1] for info in cursor_temp.fetchall()]
-        colunas_sem_id = [col for col in colunas_temp if col != 'id']
+        colunas_temp = {info[1]: i for i, info in enumerate(cursor_temp.fetchall())}
         
-        cursor_temp.execute(f"SELECT {', '.join(colunas_sem_id)} FROM questoes")
+        # Pega as colunas do DB atual
+        cursor_atual.execute("PRAGMA table_info(questoes)")
+        colunas_atuais = {info[1] for info in cursor_atual.fetchall()}
+        
+        # Interseção: usa apenas colunas que existem em AMBOS os bancos
+        colunas_comuns = [col for col in colunas_temp if col in colunas_atuais and col != 'id']
+
+        # Garante que a nova coluna de tag esteja presente
+        if 'grupo_importacao' not in colunas_comuns and 'grupo_importacao' in colunas_atuais:
+            colunas_comuns.append('grupo_importacao')
+
+        cursor_temp.execute(f"SELECT * FROM questoes")
         questoes_importar = cursor_temp.fetchall()
         
         questoes_adicionadas = 0
+        questoes_ignoradas = 0
         
-        # Encontra os índices das colunas de interesse
-        try:
-            indice_imagem = colunas_sem_id.index('imagem')
-            indice_disciplina_id = colunas_sem_id.index('disciplina_id')
-        except ValueError:
-            # Colunas novas podem não existir em DBs antigos, mas o código deve tratar
-            indice_imagem = -1
-            indice_disciplina_id = -1
+        for questao_row in questoes_importar:
+            dados_questao = {col: questao_row[idx] for col, idx in colunas_temp.items()}
 
+            # --- VERIFICAÇÃO DE DUPLICATAS ---
+            enunciado = dados_questao.get('enunciado', '')
+            cursor_atual.execute("SELECT id FROM questoes WHERE enunciado = ?", (enunciado,))
+            if cursor_atual.fetchone():
+                questoes_ignoradas += 1
+                continue # Pula para a próxima questão se já existir
 
-        # Mapeamento do ID antigo para o novo (útil para questões que referenciam outras, se houver)
-        id_map = {} 
-        
-        for idx, questao in enumerate(questoes_importar):
-            dados_questao = list(questao)
-            
-            # --- Ajuste D1: Mapear Disciplina ---
-            if indice_disciplina_id != -1 and dados_questao[indice_disciplina_id] is not None:
-                # Busca o nome da disciplina no DB temporário
-                cursor_temp.execute("SELECT nome FROM disciplinas WHERE id = ?", (dados_questao[indice_disciplina_id],))
-                nome_disciplina_temp = cursor_temp.fetchone()
-                if nome_disciplina_temp:
-                    # Busca ou cria o novo ID no DB atual
-                    novo_disciplina_id = obter_disciplina_id_por_nome(nome_disciplina_temp[0])
-                    dados_questao[indice_disciplina_id] = novo_disciplina_id
-            
-            # --- Ajuste de Imagem ---
-            if indice_imagem != -1:
-                caminho_imagem_antigo = dados_questao[indice_imagem] 
+            # --- CORREÇÃO DE CONFLITO DE IMAGEM ---
+            if 'imagem' in dados_questao and dados_questao['imagem']:
+                caminho_imagem_antigo = dados_questao['imagem']
+                nome_arquivo_antigo = os.path.basename(caminho_imagem_antigo)
+                extensao = os.path.splitext(nome_arquivo_antigo)[1]
                 
-                if caminho_imagem_antigo and caminho_imagem_antigo not in ("NULL", ""):
-                    nome_arquivo = os.path.basename(caminho_imagem_antigo)
-                    caminho_origem_img = os.path.join(temp_img_dir, nome_arquivo)
-                    caminho_destino_img = os.path.join(IMAGE_DIR, nome_arquivo)
-                    
-                    if os.path.exists(caminho_origem_img):
-                         if not os.path.exists(IMAGE_DIR): os.makedirs(IMAGE_DIR)
-                         
-                         shutil.copy2(caminho_origem_img, caminho_destino_img)
-                         caminho_imagem_novo = os.path.join(os.path.basename(IMAGE_DIR), nome_arquivo)
-                         dados_questao[indice_imagem] = caminho_imagem_novo
-                # Se não tem imagem, garante que seja NULL (o valor padrão do DB)
-                elif dados_questao[indice_imagem] in ("NULL", ""):
-                     dados_questao[indice_imagem] = None 
-
-
-            # Insere a nova questão (usando NULL para o ID para que o DB gere um novo)
-            colunas_insercao = ', '.join(colunas_sem_id)
-            placeholders = ', '.join(['?'] * len(dados_questao))
+                # Gera um novo nome de arquivo único
+                novo_nome_arquivo = f"{uuid.uuid4()}{extensao}"
+                
+                caminho_origem_img = os.path.join(temp_img_dir, nome_arquivo_antigo)
+                caminho_destino_img = os.path.join(IMAGE_DIR, novo_nome_arquivo)
+                
+                if os.path.exists(caminho_origem_img):
+                    if not os.path.exists(IMAGE_DIR): os.makedirs(IMAGE_DIR)
+                    shutil.copy2(caminho_origem_img, caminho_destino_img)
+                    # Atualiza o caminho da imagem para o novo nome
+                    dados_questao['imagem'] = os.path.join(os.path.basename(IMAGE_DIR), novo_nome_arquivo).replace('\\', '/')
             
-            # A inserção é feita com os nomes das colunas e os valores
-            query_insert = f"INSERT INTO questoes ({colunas_insercao}) VALUES ({placeholders})"
-            cursor_atual.execute(query_insert, tuple(dados_questao))
+            # Mapeia o ID da disciplina (sua lógica original adaptada)
+            if 'disciplina_id' in dados_questao and dados_questao['disciplina_id']:
+                cursor_temp.execute("SELECT nome FROM disciplinas WHERE id = ?", (dados_questao['disciplina_id'],))
+                nome_disciplina = cursor_temp.fetchone()[0]
+                dados_questao['disciplina_id'] = obter_disciplina_id_por_nome(nome_disciplina)
+
+            # --- ADICIONA A TAG DE IMPORTAÇÃO ---
+            dados_questao['grupo_importacao'] = import_tag
+
+            # Monta a query de inserção apenas com as colunas comuns
+            colunas_para_inserir = [col for col in colunas_comuns if col in dados_questao]
+            valores_para_inserir = [dados_questao[col] for col in colunas_para_inserir]
             
+            placeholders = ', '.join(['?'] * len(colunas_para_inserir))
+            query_insert = f"INSERT INTO questoes ({', '.join(colunas_para_inserir)}) VALUES ({placeholders})"
+            
+            cursor_atual.execute(query_insert, tuple(valores_para_inserir))
             questoes_adicionadas += 1
 
         conn_atual.commit()
         
-        return True, f"{questoes_adicionadas} novas questões importadas com sucesso."
+        mensagem_final = f"{questoes_adicionadas} novas questões importadas com sucesso."
+        if questoes_ignoradas > 0:
+            mensagem_final += f" {questoes_ignoradas} questões foram ignoradas por já existirem."
+            
+        return True, mensagem_final
 
     except Exception as e:
         if conn_atual: conn_atual.rollback()
-        return False, f"Erro na mesclagem SQL. O banco de dados de destino pode ter sido corrompido: {e}"
+        return False, f"Erro durante a mesclagem dos dados: {e}"
         
     finally:
         if conn_atual: conn_atual.close()
@@ -489,7 +504,6 @@ def importar_base_de_dados(caminho_origem):
         if os.path.exists(caminho_temp):
             shutil.rmtree(caminho_temp)
 
-    # Adicione estas funções ao seu database.py
 
 def salvar_configuracoes(dados):
     """Salva um dicionário de configurações no arquivo settings.json."""
@@ -570,3 +584,31 @@ def obter_todas_questoes_para_cardapio(disciplina_id=None, tema=None):
     questoes_ordenadas = sorted(questoes, key=key_sort)
     
     return questoes_ordenadas
+
+def renomear_tema(nome_antigo, nome_novo):
+    """
+    Renomeia um tema em todas as questões onde ele aparece.
+    
+    Args:
+        nome_antigo (str): O nome atual do tema a ser substituído.
+        nome_novo (str): O novo nome para o tema.
+        
+    Returns:
+        bool: True se a operação foi bem-sucedida, False caso contrário.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        
+        # A query é um simples UPDATE que busca pelo nome antigo do tema
+        cursor.execute("UPDATE questoes SET tema = ? WHERE tema = ?", (nome_novo, nome_antigo))
+        
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Erro ao renomear tema no banco de dados: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()

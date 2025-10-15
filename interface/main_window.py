@@ -1,16 +1,14 @@
 # interface/main_window.py
 
-import sys
 import os
 import shutil
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QDesktopWidget, QAction,
     QMessageBox, QFileDialog, QDialog, QScrollArea, QVBoxLayout, QLabel,
-    QPushButton, QWidget, QHBoxLayout, QToolBar, QAction, QWidgetAction, QSizePolicy,
-    QToolButton, QMenu
+    QPushButton, QToolBar, QAction, QToolButton, QMenu
 )
 from PyQt5.QtCore import Qt
-from .custom_widgets import MeuBotao
+from .custom_widgets import MeuBotao, EstilosApp
 
 from .MenuInicial import MenuInicialWindow as MainMenuScreen
 from .visualizar_questoes import VisualizarQuestoesScreen
@@ -30,7 +28,7 @@ class MainWindow(QMainWindow):
         self.navigation_history = []
         self.setWindowTitle("Gerador de Provas")
         self.is_first_show = True
-        self._aplicar_estilos() # Aplica o estilo da QMenuBar
+        EstilosApp.aplicar_estilo_janela_principal(self)
         
         # 1. Chamamos o novo método que cria nossa barra superior única
         self._criar_barra_superior_unificada()
@@ -84,62 +82,6 @@ class MainWindow(QMainWindow):
             self._center()
             # Desativa a flag para não executar novamente.
             self.is_first_show = False
-
-    def _aplicar_estilos(self):
-        style = """
-            QMainWindow { background-color: #f7f7ff; }
-            
-            /* A barra superior unificada */
-            #TopBar { 
-                background-color: #001f3f; 
-                color: white; 
-                border: none;
-                padding: 2px;
-                spacing: 5px;
-            }
-
-            /* --- NOVO ESTILO EXCLUSIVO PARA A SETA --- */
-            /* Botão de VOLTAR (seta) com fonte maior */
-            #VoltarToolButton {
-                color: white;
-                background-color: transparent;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 8px; /* Padding ajustado para o ícone maior */
-                font-size: 22px;  /* Fonte significativamente maior para a seta */
-                font-weight: bold;
-            }
-            #VoltarToolButton:hover, #VoltarToolButton:pressed {
-                background-color: #001a33; /* Efeito de hover/clique */
-            }
-
-            /* --- ESTILO ANTIGO, AGORA SÓ PARA OS MENUS --- */
-            /* Botões de MENU (Dados, etc.) com fonte normal */
-            #MenuToolButton {
-                color: white;
-                background-color: transparent;
-                border: none;
-                border-radius: 4px;
-                padding: 6px 10px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            #MenuToolButton::menu-indicator { image: none; }
-            #MenuToolButton:hover, #MenuToolButton:pressed {
-                background-color: #001a33;
-            }
-
-            /* O menu suspenso que aparece */
-            QMenu { 
-                background-color: #001f3f; 
-                color: white; 
-                border: 1px solid #001a33; 
-            }
-            QMenu::item:selected { 
-                background-color: #4169E1; 
-            }
-        """
-        self.setStyleSheet(style)
 
     def _center(self):
         qr = self.frameGeometry()

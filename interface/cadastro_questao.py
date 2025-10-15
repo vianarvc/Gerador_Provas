@@ -1002,7 +1002,7 @@ class CadastroQuestaoScreen(QWidget):
         # --- INÍCIO DA NOVA LÓGICA DE BUSCA ---
         variante_sucesso = None
         log_final_erro = ""
-        max_tentativas = 500  # Um limite de segurança para encontrar uma variante válida
+        max_tentativas = 100  # Um limite de segurança para encontrar uma variante válida
 
         for tentativa in range(max_tentativas):
             # Usamos uma sequência de sementes previsível para a busca (0, 1, 2, ...)

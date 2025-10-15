@@ -21,6 +21,291 @@ try:
 except ImportError:
     sp = None
 
+import random, math, json, traceback, re
+from collections import Counter, defaultdict
+from itertools import groupby, product
+import ast
+from typing import Dict, List, Set, Any, Tuple
+import os
+
+class CombinatorialEngine:
+    """Motor otimizado para questões com alto número de combinações - FOCADO EM ELETROTÉCNICA"""
+    
+    def __init__(self, max_combinations: int = 20000, max_sample: int = 1000):
+        self.max_combinations = max_combinations
+        self.max_sample = max_sample
+        
+    def generate_smart_pool(self, questao_base: Dict, params_code: str, base_context: Dict) -> Set:
+        """
+        Gera pool inteligente com amostragem estratégica para questões de eletrotécnica
+        """
+        q_id = questao_base.get('id', 'N/A')
+        
+        try:
+            # Análise AST do código para identificar variáveis
+            choice_vars, calculation_source = self._analyze_parameters(params_code, base_context)
+            if not choice_vars:
+                return None
+                
+            print(f"🔍 Engine Combinatória - Questão ID {q_id}")
+            print(f"   Variáveis encontradas: {list(choice_vars.keys())}")
+            print(f"   Tamanhos dos domínios: {[len(v) for v in choice_vars.values()]}")
+            
+            # Calcula total de combinações possíveis
+            total_possible = 1
+            for values in choice_vars.values():
+                total_possible *= len(values)
+            print(f"   Combinações totais possíveis: {total_possible:,}")
+            
+            # Seleciona estratégia baseada nas características
+            sampling_strategy = self._select_sampling_strategy(choice_vars, total_possible)
+            print(f"   Estratégia selecionada: {sampling_strategy.__name__}")
+            
+            # Gera combinações usando a estratégia selecionada
+            combinations = sampling_strategy(choice_vars, base_context, total_possible)
+            print(f"   Combinações a processar: {len(combinations):,}")
+            
+            # Processa as combinações e coleta resultados únicos
+            results = self._process_combinations(
+                combinations, choice_vars, calculation_source, base_context, questao_base
+            )
+            
+            print(f"   ✅ Resultados únicos gerados: {len(results)}")
+            return results
+            
+        except Exception as e:
+            print(f"   ❌ Erro no motor combinatório: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _analyze_parameters(self, params_code: str, base_context: Dict) -> Tuple[Dict, str]:
+        """Analisa o código Python e extrai variáveis de random.choice"""
+        try:
+            tree = ast.parse(params_code)
+            choice_assignments = []
+            other_nodes = []
+            
+            for node in tree.body:
+                if (isinstance(node, ast.Assign) and 
+                    isinstance(node.value, ast.Call) and
+                    isinstance(node.value.func, ast.Attribute) and 
+                    isinstance(node.value.func.value, ast.Name) and
+                    node.value.func.value.id == 'random' and 
+                    node.value.func.attr == 'choice'):
+                    choice_assignments.append(node)
+                else:
+                    other_nodes.append(node)
+            
+            if not choice_assignments:
+                return None, ""
+            
+            # Executa o código original para obter os valores reais
+            temp_context = base_context.copy()
+            temp_context['random'] = random
+            exec(params_code, temp_context)
+            
+            # Extrai as listas de valores para cada variável
+            choice_vars = {}
+            for assign_node in choice_assignments:
+                var_name = assign_node.targets[0].id
+                arg_as_string = ast.unparse(assign_node.value.args[0])
+                values = eval(arg_as_string, temp_context)
+                choice_vars[var_name] = values
+            
+            # Prepara o código de cálculo (parte sem random.choice)
+            calculation_tree = ast.Module(body=other_nodes, type_ignores=[])
+            calculation_source = ast.unparse(calculation_tree)
+            
+            return choice_vars, calculation_source
+            
+        except Exception as e:
+            print(f"   ❌ Erro na análise AST: {e}")
+            return None, ""
+    
+    def _select_sampling_strategy(self, choice_vars: Dict, total_possible: int) -> callable:
+        """Seleciona a melhor estratégia de amostragem baseada nas variáveis"""
+        if total_possible <= self.max_combinations:
+            return self._exhaustive_sampling
+        
+        # Analisa tipos de variáveis
+        has_continuous = False
+        has_large_domains = False
+        
+        for values in choice_vars.values():
+            if any(isinstance(v, (int, float)) for v in values):
+                has_continuous = True
+            if len(values) > 10:  # Domínio grande
+                has_large_domains = True
+        
+        if has_continuous:
+            return self._continuous_sampling
+        elif has_large_domains:
+            return self._discrete_large_sampling
+        else:
+            return self._discrete_sampling
+    
+    def _exhaustive_sampling(self, choice_vars: Dict, base_context: Dict, total_possible: int) -> List[Tuple]:
+        """Processamento completo (para combinações pequenas)"""
+        var_names = list(choice_vars.keys())
+        value_lists = list(choice_vars.values())
+        return list(product(*value_lists))
+    
+    def _continuous_sampling(self, choice_vars: Dict, base_context: Dict, total_possible: int) -> List[Tuple]:
+        """
+        Amostragem REOTIMIZADA: Gera menos combinações para evitar pool excessivo
+        """
+        var_names = list(choice_vars.keys())
+        
+        # 1. Combinação correta garantida
+        correct_combination = tuple(base_context.get(v) for v in var_names)
+        samples = set([correct_combination])
+        
+        # 2. Estratégia MAIS CONSERVADORA para variáveis contínuas
+        max_samples = min(200, total_possible)  # REDUZIDO drasticamente
+        
+        # 3. Para eletrotécnica: foca nos valores mais representativos
+        for i, (var_name, values) in enumerate(choice_vars.items()):
+            if all(isinstance(v, (int, float)) for v in values) and len(samples) < max_samples:
+                sorted_vals = sorted(values)
+                n = len(sorted_vals)
+                
+                # Valores CRÍTICOS apenas: mínimo, máximo, mediana
+                critical_values = [
+                    sorted_vals[0],      # Mínimo
+                    sorted_vals[-1],     # Máximo
+                    sorted_vals[n//2],   # Mediana
+                ]
+                
+                # Para cada valor crítico, cria uma combinação
+                for critical_val in critical_values:
+                    if len(samples) >= max_samples:
+                        break
+                    new_comb = list(correct_combination)
+                    new_comb[i] = critical_val
+                    samples.add(tuple(new_comb))
+        
+        # 4. Amostra aleatória MUITO limitada
+        attempts = 0
+        max_attempts = 500
+        
+        while len(samples) < max_samples and attempts < max_attempts:
+            new_sample = tuple(random.choice(values) for values in choice_vars.values())
+            samples.add(new_sample)
+            attempts += 1
+        
+        print(f"   🎯 Amostras geradas: {len(samples)} (limite: {max_samples})")
+        return list(samples)
+    
+    def _discrete_large_sampling(self, choice_vars: Dict, base_context: Dict, total_possible: int) -> List[Tuple]:
+        """Amostragem para variáveis discretas com domínios grandes"""
+        var_names = list(choice_vars.keys())
+        correct_combination = tuple(base_context.get(v) for v in var_names)
+        samples = set([correct_combination])
+        
+        # Estratégia: amostra proporcional ao tamanho do domínio
+        max_samples = min(self.max_sample, total_possible)
+        
+        while len(samples) < max_samples:
+            new_sample = []
+            for var_name, values in choice_vars.items():
+                # Amostra mais diversa para domínios maiores
+                if len(values) > 5:
+                    # Pega valores espaçados para domínios grandes
+                    idx = random.randint(0, len(values) - 1)
+                    new_sample.append(values[idx])
+                else:
+                    new_sample.append(random.choice(values))
+            
+            samples.add(tuple(new_sample))
+        
+        return list(samples)
+    
+    def _discrete_sampling(self, choice_vars: Dict, base_context: Dict, total_possible: int) -> List[Tuple]:
+        """Amostragem padrão para variáveis discretas"""
+        var_names = list(choice_vars.keys())
+        correct_combination = tuple(base_context.get(v) for v in var_names)
+        samples = set([correct_combination])
+        
+        max_samples = min(self.max_sample, total_possible)
+        attempts = 0
+        max_attempts = max_samples * 2
+        
+        while len(samples) < max_samples and attempts < max_attempts:
+            new_sample = tuple(random.choice(values) for values in choice_vars.values())
+            samples.add(new_sample)
+            attempts += 1
+        
+        return list(samples)
+    
+    def _process_combinations(self, combinations: List[Tuple], choice_vars: Dict, 
+                            calculation_source: str, base_context: Dict, questao_base: Dict) -> Set:
+        """Executa o cálculo para cada combinação e filtra resultados válidos"""
+        var_names = list(choice_vars.keys())
+        possible_outcomes = set()
+        permitir_negativos = questao_base.get("permitir_negativos", False)
+        
+        print(f"   🔄 Processando {len(combinations)} combinações...")
+        
+        for i, combination in enumerate(combinations):
+            try:
+                # Monta o script de atribuição
+                assignment_script = ""
+                current_combination_dict = dict(zip(var_names, combination))
+                
+                for var_name, value in current_combination_dict.items():
+                    assignment_script += f"{var_name} = {repr(value)}\n"
+                
+                full_script = assignment_script + calculation_source
+                
+                # Executa em contexto isolado
+                exec_context = base_context.copy()
+                exec_context.update(current_combination_dict)
+                exec(full_script, exec_context)
+                
+                # Obtém o resultado
+                result = exec_context.get('resposta_valor') or exec_context.get('resposta')
+                
+                # Aplica filtros
+                if self._is_valid_result(result, permitir_negativos):
+                    if isinstance(result, dict) and 'valores' in result:
+                        # Modo 1: Múltiplos valores
+                        vals_dict = result['valores']
+                        hashable_result = tuple(sorted(vals_dict.items()))
+                        possible_outcomes.add(hashable_result)
+                    elif isinstance(result, (int, float)):
+                        # Modo 2: Valor único
+                        possible_outcomes.add(result)
+                        
+            except Exception as e:
+                # Ignora erros em combinações individuais
+                continue
+        
+        return possible_outcomes
+    
+    def _is_valid_result(self, result, permitir_negativos: bool) -> bool:
+        """Verifica se o resultado é válido baseado nos filtros"""
+        if result is None:
+            return False
+        
+        # Filtro anti-zero
+        if isinstance(result, (int, float)) and abs(result) < 1e-15:
+            return False
+        
+        if isinstance(result, dict) and 'valores' in result:
+            for v in result['valores'].values():
+                if isinstance(v, (int, float)) and abs(v) < 1e-15:
+                    return False
+                if not permitir_negativos and isinstance(v, (int, float)) and v < 0:
+                    return False
+        
+        # Filtro de negativos
+        if not permitir_negativos and isinstance(result, (int, float)) and result < 0:
+            return False
+            
+        return True
+#-------------------------------------------------------------------------------------------------------
+
 def _get_math_context():
     """Cria o dicionário de contexto com as bibliotecas disponíveis."""
     context = {
@@ -120,113 +405,14 @@ def _calcular_apenas_resposta(questao_base, seed):
 
 def _gerar_pool_combinatorio(questao_base, params_code, base_context):
     """
-    Analisa o código Python, extrai variáveis de random.choice,
-    e executa todas as combinações para gerar um pool determinístico de resultados.
-    (Versão 3.0 - Robusta, reconstrói o script para cada combinação)
+    SUBSTITUIÇÃO OTIMIZADA: Usa o CombinatorialEngine para gerar pools inteligentes
     """
-    import ast
-    import itertools
-    import random
-
-    # Garante que o 'random' está no contexto, não importa como ele foi chamado
-    if 'random' not in base_context:
-        base_context['random'] = random # <-- 2. ADICIONE ESTA LINHA
-
-    q_id = questao_base.get('id', 'N/A')
-    #print(f"\n--- Análise Combinatória para Questão ID: {q_id} ---")
-
-    try:
-        tree = ast.parse(params_code)
-        
-        choice_assignments = []
-        other_nodes = []
-        
-        # 1. Separa as linhas de `... = random.choice(...)` do resto do código.
-        for node in tree.body:
-            if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and
-                    isinstance(node.value.func, ast.Attribute) and isinstance(node.value.func.value, ast.Name) and
-                    node.value.func.value.id == 'random' and node.value.func.attr == 'choice'):
-                choice_assignments.append(node)
-            else:
-                other_nodes.append(node)
-
-        if not choice_assignments:
-            print("  - AVISO: Não é uma questão do tipo combinatório (sem random.choice). Análise ignorada.")
-            print(f"--- Fim da Análise para Questão ID: {q_id} ---")
-            return None
-
-        # 2. Extrai as listas de valores de forma segura
-        # Executa o código uma vez para que as listas (ex: minha_lista) sejam definidas
-        temp_context = base_context.copy()
-        exec(params_code, temp_context)
-        choice_vars = {}
-        for assign_node in choice_assignments:
-            var_name = assign_node.targets[0].id
-            arg_as_string = ast.unparse(assign_node.value.args[0])
-            values = eval(arg_as_string, temp_context)
-            choice_vars[var_name] = values
-        
-        # 3. Pega o código de cálculo (tudo que não é random.choice)
-        calculation_tree = ast.Module(body=other_nodes, type_ignores=[])
-        calculation_source = ast.unparse(calculation_tree)
-        #print(f"  - Fórmulas de Cálculo Extraídas:\n---\n{calculation_source.strip()}\n---")
-        
-        # 4. Gera todas as combinações
-        var_names = list(choice_vars.keys())
-        value_lists = list(choice_vars.values())
-        all_combinations = list(itertools.product(*value_lists))
-        #print(f"  - Variáveis e Valores: {choice_vars}")
-        #print(f"  - Total de Combinações a testar: {len(all_combinations)}")
-
-        possible_outcomes = set()
-
-        # 5. Loop, monta o "mini-script" para cada combinação e executa
-        for combination in all_combinations:
-            # ... (código que monta o script e o contexto)
-            assignment_script = ""
-            current_combination_dict = dict(zip(var_names, combination))
-            for var_name, value in current_combination_dict.items():
-                assignment_script += f"{var_name} = {repr(value)}\n"
-
-            full_script_for_run = assignment_script + calculation_source
-            
-            exec_context = base_context.copy()
-            exec(full_script_for_run, exec_context)
-            
-            result = exec_context.get('resposta_valor') or exec_context.get('resposta')
-
-            # --- FILTRO ANTI-ZERO ADICIONADO ---
-            is_zero_present = False
-            if isinstance(result, dict) and 'valores' in result:
-                # Para MODO 1, verifica se algum dos valores no dicionário é zero
-                for v in result['valores'].values():
-                    if isinstance(v, (int, float)) and abs(v) < 1e-15: # 1e-9 é uma tolerância para zero em ponto flutuante
-                        is_zero_present = True
-                        break
-            elif isinstance(result, (int, float)):
-                # Para MODO 2, verifica se o próprio valor é zero
-                if abs(result) < 1e-15:
-                    is_zero_present = True         
-            
-            # Só adiciona ao pool se não houver zero na resposta
-            if not is_zero_present:
-                if isinstance(result, dict) and 'valores' in result:
-                    vals_dict = result['valores']
-                    hashable_result = tuple(sorted(vals_dict.items()))
-                    possible_outcomes.add(hashable_result)
-                elif isinstance(result, (int, float)):
-                    possible_outcomes.add(result)
-        
-        #print(f"  - Pool de Resultados Únicos Encontrados: {possible_outcomes}")
-        #print(f"--- Fim da Análise para Questão ID: {q_id} ---")
-
-        return possible_outcomes
-
-    except Exception as e:
-        print(f"ERRO CRÍTICO no motor combinatório ao analisar a questão ID {q_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
+    engine = CombinatorialEngine(
+        max_combinations=20000,
+        max_sample=1000
+    )
+    
+    return engine.generate_smart_pool(questao_base, params_code, base_context)
 
 def _gerar_variante_questao(questao_base, seed):
     is_multi_valor = False
@@ -265,16 +451,6 @@ def _gerar_variante_questao(questao_base, seed):
         contexto_formatado = contexto.copy()
 
         import re
-        '''prefix_divisors = { 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'm': 1e-3, 'u': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12 }
-        placeholders = re.findall(r'\{(\w+)\}(?:\s*)((?:T|G|M|k|K|m|u|µ|n|p)\w{0,2})\b', enunciado_template)
-        for var_name, unit_with_prefix in placeholders:
-            if var_name in contexto_formatado and isinstance(contexto_formatado[var_name], (int, float)):
-                prefix = unit_with_prefix[0]
-                if prefix in prefix_divisors:
-                    original_value = float(contexto_formatado[var_name])
-                    divisor = prefix_divisors[prefix]
-                    converted_value = original_value / divisor
-                    contexto_formatado[var_name] = int(converted_value) if converted_value == int(converted_value) else converted_value'''
 
         placeholders = re.findall(r'\{(\w+)\}(?:\s*)(\S+)\b', enunciado_template)
         for var_name, potential_unit_text in placeholders:
@@ -396,7 +572,44 @@ def _gerar_variante_questao(questao_base, seed):
                         if abs(valor_num) < 1e-15:
                             continue
 
+                            print(f"\n--- DEBUG DETALHADO PARA QUESTÃO ID {questao_base.get('id')} ---")
+
                         pool_de_textos.add(texto_formatado)
+                
+                    # --- INÍCIO DO BLOCO DE DEBUG DETALHADO ---
+                    # 1. Qual é a resposta correta numérica exata?
+                    resposta_correta_num = resposta_valor_calculado
+                    print(f"DEBUG: Resposta correta NUMÉRICA: {repr(resposta_correta_num)}")
+
+                    # 2. Como ela fica depois de formatada?
+                    resposta_correta_texto = formatar_unidade(resposta_correta_num, unidade)
+                    print(f"DEBUG: Resposta correta FORMATADA: '{resposta_correta_texto}'")
+
+                    # 3. Quantos itens o pool de textos tem?
+                    print(f"DEBUG: Tamanho do pool de textos: {len(pool_de_textos)}")
+
+                    # 4. A resposta correta formatada está no pool? (ESTA É A VERIFICAÇÃO CRÍTICA)
+                    esta_no_pool = resposta_correta_texto in pool_de_textos
+                    print(f"DEBUG: A resposta formatada ESTÁ no pool de textos? {esta_no_pool}")
+
+                    if not esta_no_pool:
+                        # Se não estiver, vamos procurar por um valor numericamente próximo
+                        valor_proximo = None
+                        min_diff = float('inf')
+                        for num in pool_numerico:
+                            diff = abs(resposta_correta_num - num)
+                            if diff < min_diff:
+                                min_diff = diff
+                                valor_proximo = num
+                        if valor_proximo is not None:
+                            print(f"DEBUG: Valor NUMÉRICO mais próximo no pool: {repr(valor_proximo)}")
+                            print(f"DEBUG: Valor mais próximo FORMATADO: '{formatar_unidade(valor_proximo, unidade)}'")
+                            print(f"DEBUG: Diferença numérica mínima: {min_diff}")
+                    
+                    print(f"--- FIM DO DEBUG ---\n")
+                    # --- FIM DO BLOCO DE DEBUG ---
+
+                        
                     
                     print(f"DEBUG (ID {questao_base.get('id', 'N/A')}): Pool de textos final (após filtros): {sorted(list(pool_de_textos))}")
 
@@ -426,6 +639,18 @@ def _gerar_variante_questao(questao_base, seed):
                         print(f"FALHA: Pool de textos insuficiente para ID {questao_base.get('id', 'N/A')} mesmo após adicionar a resposta correta. Descartada.")
                         return None
                     
+                    max_pool_size = 30  # Número máximo de alternativas no pool final
+
+                    if len(pool_de_textos) > max_pool_size:
+                        print(f"DEBUG: Pool reduzido de {len(pool_de_textos)} para {max_pool_size} alternativas")
+                        # Converte para lista, remove a resposta correta, limita, e adiciona a resposta de volta
+                        pool_list = list(pool_de_textos)
+                        if resposta_correta_texto in pool_list:
+                            pool_list.remove(resposta_correta_texto)
+                        # Seleciona aleatoriamente um subconjunto
+                        pool_list_limited = random.sample(pool_list, max_pool_size - 1)
+                        pool_de_textos = set(pool_list_limited) | {resposta_correta_texto}
+
                     pool_sem_resposta = set(pool_de_textos)
                     pool_sem_resposta.discard(resposta_correta_texto)
                     
@@ -501,7 +726,7 @@ def _gerar_variante_questao(questao_base, seed):
         traceback.print_exc()
         return None
 
-    imagem_path = questao_base.get("imagem", "")
+    '''imagem_path = questao_base.get("imagem", "")
     if imagem_path: imagem_path = imagem_path.replace('\\', '/')
     largura_imagem = questao_base.get("imagem_largura_percentual") or 50
     
@@ -512,6 +737,28 @@ def _gerar_variante_questao(questao_base, seed):
         "num_alternativas": num_alternativas, 
         "enunciado": enunciado_final, 
         "imagem": imagem_path, 
+        "imagemLarguraPercentual": largura_imagem, 
+        "resposta_valor": resposta_valor, 
+        "alternativas_valores": alternativas_valores,
+        "is_multi_valor": is_multi_valor }'''
+    
+    imagem_path = questao_base.get("imagem", "")
+    if imagem_path:
+        imagem_path = imagem_path.replace('\\', '/')
+        # Verifica se o arquivo de imagem realmente existe
+        if not os.path.exists(imagem_path):
+            print(f"⚠️ AVISO: Imagem não encontrada - {imagem_path}")
+            imagem_path = ""  # Remove a imagem se não existir
+    
+    largura_imagem = questao_base.get("imagem_largura_percentual") or 50
+    
+    return { 
+        "id_base": questao_base.get("id"), 
+        "tema": questao_base.get("tema"), 
+        "formato_questao": formato_questao, 
+        "num_alternativas": num_alternativas, 
+        "enunciado": enunciado_final, 
+        "imagem": imagem_path,  # ← Já validada
         "imagemLarguraPercentual": largura_imagem, 
         "resposta_valor": resposta_valor, 
         "alternativas_valores": alternativas_valores,
@@ -536,41 +783,9 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
     valor_por_questao = opcoes_pontuacao.get("valor_por_questao", 0.0)
     mostrar_valor_individual = opcoes_pontuacao.get("mostrar_valor_individual", False)
 
-    # --- INÍCIO DA NOVA LÓGICA DE GERAÇÃO GARANTIDA ---
+    # --- LÓGICA DE PRÉ-GERAÇÃO REMOVIDA: Não precisamos mais do 'banco_de_variantes' ---
 
-    # 1. PRÉ-GERAÇÃO DAS VARIAÇÕES
-    # Para cada questão de cálculo, vamos descobrir todas as suas variações únicas primeiro.
-    banco_de_variantes = defaultdict(list)
-    variantes_unicas_por_questao = defaultdict(set)
-
-    for q_base in questoes_base:
-        q_id = q_base['id']
-        
-        # Se a questão não tem parâmetros (ex: teórica), ela só tem uma "variação".
-        if not q_base.get('parametros'):
-            variante = _gerar_variante_questao(q_base, f"static-{q_id}")
-            if variante:
-                banco_de_variantes[q_id] = [variante]
-            continue
-
-        # Para questões de cálculo, tentamos encontrar todas as variações únicas.
-        max_tentativas_pool = 75 # Um número alto de tentativas para garantir encontrar as variações
-        for i in range(max_tentativas_pool):
-            #seed_pool = f"pool-{q_id}-{i}"
-            #variante = _gerar_variante_questao(q_base, seed_pool)
-            variante = _gerar_variante_questao(q_base, None)
-
-            if variante:
-                # Usamos o enunciado como uma "assinatura" para detectar variações únicas
-                assinatura = variante['enunciado']
-                if assinatura not in variantes_unicas_por_questao[q_id]:
-                    variantes_unicas_por_questao[q_id].add(assinatura)
-                    banco_de_variantes[q_id].append(variante)
-        
-        # Embaralha as variações encontradas para que a distribuição seja aleatória
-        random.shuffle(banco_de_variantes[q_id])
-
-    # 2. PREPARAÇÃO DOS 'SLOTS' (para Grupos de questões, sem alteração na lógica)
+    # 1. PREPARAÇÃO DOS 'SLOTS' (lógica original, sem alterações)
     questoes_base.sort(key=lambda q: q.get("grupo") or f"__individual_{q['id']}__")
     slots = []
     for key, group in groupby(questoes_base, key=lambda q: q.get("grupo")):
@@ -583,12 +798,11 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
     if opcoes_gabarito.get("embaralhar_questoes", True):
         random.shuffle(slots)
 
-    # 3. MONTAGEM DAS VERSÕES DA PROVA
+    # 2. PREPARAÇÃO DOS GABARITOS (lógica original, sem alterações)
     versoes_finais = []
     num_questoes_me = sum(1 for slot in slots if slot[0]['formato_questao'] == 'Múltipla Escolha')
     
     if num_questoes_me == 1:
-        # Se for apenas 1 questão, sorteia diretamente o gabarito.
         gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"])]
     elif opcoes_gabarito.get("distribuir", True):
         gabarito_me_v1 = _gerar_gabarito_distribuido(num_questoes_me)
@@ -596,25 +810,32 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
     else:
         gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"]) for _ in range(num_questoes_me)]
 
+    # 3. MONTAGEM DAS VERSÕES (LÓGICA OTIMIZADA)
     for i in range(num_versoes):
-        versao_final = []
+        # Prepara a estrutura para a nova versão (usando a que já funciona com o gerador_pdf)
+        letra_versao = chr(65 + i)
+        versao_data = {
+            'letra': letra_versao,
+            'questoes': []
+        }
+        
         gabarito_me_atual = [_rotacionar_letra(letra, i * opcoes_gabarito.get("rotacao", 0)) for letra in gabarito_me_v1]
         contador_me = 0
 
         for slot in slots:
             questao_base_para_versao = slot[i % len(slot)]
-            q_id = questao_base_para_versao['id']
-
-            # --- PONTO CENTRAL DA MUDANÇA ---
-            # Em vez de gerar uma nova variação, pegamos uma da nossa lista pré-gerada.
-            lista_de_variantes = banco_de_variantes.get(q_id, [])
-            if not lista_de_variantes:
-                continue # Salvaguarda caso nenhuma variação tenha sido encontrada
-
-            # Pega a próxima variação disponível da lista, de forma cíclica
-            variante = lista_de_variantes[i % len(lista_de_variantes)]
             
-            # A partir daqui, a lógica é a mesma de antes, mas aplicada à 'variante' que já pegamos pronta.
+            # --- PONTO CENTRAL DA MUDANÇA ---
+            # Geramos uma nova variante AQUI, sob demanda, para cada versão da prova.
+            # O 'None' no seed garante que seja aleatória a cada chamada.
+            variante = _gerar_variante_questao(questao_base_para_versao, None)
+            
+            # Se a geração da variante falhar por algum motivo, pulamos para a próxima questão.
+            if not variante:
+                print(f"AVISO: A geração da variante para a questão ID {questao_base_para_versao['id']} falhou. A questão não será incluída nesta versão da prova.")
+                continue
+
+            # --- O resto do código é o mesmo de antes, processando a 'variante' ---
             questao_final = variante.copy()
             if mostrar_valor_individual and valor_por_questao > 0:
                 questao_final["valor"] = f"{valor_por_questao:.2f}".replace('.', ',')
@@ -633,6 +854,10 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
                 alternativas = list(variante["alternativas_valores"])
                 resposta_valor = variante["resposta_valor"]
                 
+                # Salvaguarda: Se por algum motivo as alternativas estiverem vazias, não continuamos
+                if not alternativas or resposta_valor is None:
+                    continue
+
                 if resposta_valor not in alternativas and len(alternativas) < num_alternativas:
                     alternativas.append(resposta_valor)
                 
@@ -649,16 +874,14 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao):
 
             elif variante['formato_questao'] == 'Verdadeiro ou Falso':
                 questao_final["gabarito"] = "V" if variante["resposta_valor"] == "Verdadeiro" else "F"
-            else:
+            else: # Discursiva
                 questao_final["gabarito"] = "D"
             
-            versao_final.append(questao_final)
+            versao_data['questoes'].append(questao_final)
         
-        versoes_finais.append(versao_final)
+        versoes_finais.append(versao_data)
         
     return versoes_finais
-
-# (Em motor_gerador.py, substitua a função inteira)
 
 def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, log_dialog=None):
     """

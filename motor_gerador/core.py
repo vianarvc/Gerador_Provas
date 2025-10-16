@@ -10,8 +10,9 @@ from itertools import groupby
 
 from PyQt5.QtWidgets import QApplication
 
-from .cache_manager import calculation_cache, iniciar_nova_geracao_cache, print_cache_stats_to_log
+#from .cache_manager import calculation_cache, iniciar_nova_geracao_cache, print_cache_stats_to_log
 from .utils import _get_math_context, _executar_logica_tabela, formatar_unidade
+import time
 
 
 def _gerar_variante_questao(questao_base, seed):
@@ -20,18 +21,25 @@ def _gerar_variante_questao(questao_base, seed):
     """
     is_multi_valor = False
     try:
-        if seed is not None:
-            random.seed(seed)
+        rng = random.Random()
+        '''if seed is not None:
+            #random.seed(seed)
+            rng = random.Random()'''
+
+        # Gerar seed única combinando múltiplos fatores
+        timestamp = int(time.time() * 1000)
+        unique_seed = hash(f"{seed}_{timestamp}_{os.getpid()}_{random.getrandbits(64)}")
+        rng.seed(unique_seed)
         
         # Gera chave única para cache
         questao_id = questao_base.get('id', 'N/A')
-        cache_key = f"variante_{questao_id}_{seed}"
+        #cache_key = f"variante_{questao_id}_{id_prova}_{unique_seed}"
         
         # Tenta obter do cache
-        cached_variante = calculation_cache.get(cache_key)
+        '''cached_variante = calculation_cache.get(cache_key)
         if cached_variante is not None:
             print(f"   💾 Variante em cache - Questão {questao_id}")
-            return cached_variante
+            return cached_variante'''
         
         formato_questao = questao_base.get("formato_questao", "Múltipla Escolha")
         num_alternativas = questao_base.get("num_alternativas", 5)
@@ -46,7 +54,13 @@ def _gerar_variante_questao(questao_base, seed):
 
             if questao_base.get("tipo_questao", "Código (Python)") == "Código (Python)":
                 try:
+                    # ✅ INJETAR o rng no contexto antes de executar
+                    contexto['rng'] = rng
+                    contexto['random'] = rng  # Substitui o random padrão
                     exec(params, contexto)
+                    # ✅ LIMPAR do contexto após execução
+                    del contexto['rng']
+                    del contexto['random']
                 except Exception as e:
                     id_questao = questao_base.get('id', 'N/A')
                     aviso = f"AVISO: Erro no código da questão ID {id_questao}: '{e}'. A questão não será gerada."
@@ -146,9 +160,9 @@ def _gerar_variante_questao(questao_base, seed):
                             print(f"AVISO: ID {questao_base.get('id', 'N/A')}: Limite de tentativas atingido. Questão descartada.")
                             return None
                         
-                        distrator_dict_numerico = {chave: random.choice(pool) for chave, pool in pools_filtrados.items()}
+                        distrator_dict_numerico = {chave: rng.choice(pool) for chave, pool in pools_filtrados.items()}
                         distrator_texto = formatar_dict_inteligentemente(distrator_dict_numerico, formato_texto, unidade)
-                        
+                
                         if distrator_texto not in alternativas_valores:
                             alternativas_valores.append(distrator_texto)
                         
@@ -199,7 +213,7 @@ def _gerar_variante_questao(questao_base, seed):
                         pool_list = list(pool_de_textos)
                         if resposta_correta_texto in pool_list:
                             pool_list.remove(resposta_correta_texto)
-                        pool_list_limited = random.sample(pool_list, max_pool_size - 1)
+                        pool_list_limited = rng.sample(pool_list, max_pool_size - 1)
                         pool_de_textos = set(pool_list_limited) | {resposta_correta_texto}
 
                     pool_sem_resposta = set(pool_de_textos)
@@ -289,7 +303,7 @@ def _gerar_variante_questao(questao_base, seed):
         "alternativas_valores": alternativas_valores,
         "is_multi_valor": is_multi_valor }
 
-    calculation_cache.set(cache_key, variante_final)
+    #calculation_cache.set(cache_key, variante_final)
     
     return variante_final
 
@@ -329,7 +343,7 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao, log_dialog=N
     
     # Inicia nova geração de cache
     nome_prova = opcoes_geracao.get('nome_prova', 'prova_geral')
-    iniciar_nova_geracao_cache(f"prova_{nome_prova}")
+    #iniciar_nova_geracao_cache(f"prova_{nome_prova}")
     
     if log_dialog:
         log_dialog.append_log(f"🔄 Gerando {num_versoes} versão(ões)...")
@@ -349,11 +363,11 @@ def gerar_versoes_prova(questoes_base, num_versoes, opcoes_geracao, log_dialog=N
         versoes_finais = gerar_versoes_prova_serial(questoes_base, num_versoes, opcoes_geracao)
     
     # Estatísticas
-    if log_dialog:
+    '''if log_dialog:
         print_cache_stats_to_log(log_dialog)
     else:
         from .cache_manager import finalizar_geracao_com_statistics
-        finalizar_geracao_com_statistics()
+        finalizar_geracao_com_statistics()'''
     
     return versoes_finais
 
@@ -423,11 +437,11 @@ def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, l
         
         log_message("Cardápio de questões gerado com sucesso!")
 
-        if log_dialog:
+        '''if log_dialog:
             print_cache_stats_to_log(log_dialog)
         else:
             from .cache_manager import finalizar_geracao_com_statistics
-            finalizar_geracao_com_statistics()
+            finalizar_geracao_com_statistics()'''
 
         return True, "Cardápio gerado com sucesso!"
 

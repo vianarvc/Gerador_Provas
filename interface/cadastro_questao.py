@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont, QPixmap, QSyntaxHighlighter, QTextCharFormat, QColor
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from database import salvar_questao, obter_questao_por_id, atualizar_questao, obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, salvar_disciplina, obter_disciplina_nome_por_id
+from database import salvar_questao, obter_questao_por_id, atualizar_questao, obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, salvar_disciplina, obter_disciplina_nome_por_id, obter_grupos_por_tema
 import gerenciador_imagens
 from .custom_widgets import (
     MeuBotao, MeuLineEdit, MeuComboBox, MeuGroupBox, MeuLabel, 
@@ -153,8 +153,10 @@ class CadastroQuestaoScreen(QWidget):
 
         self.grupo_label = QLabel("Grupo (opcional):")
         # --- MUDANÇA: Usa MeuLineEdit ---
-        self.grupo_input = MeuLineEdit()
-        self.grupo_input.setPlaceholderText("Ex: CONCEITO-LEI-OHM")
+        self.grupo_input = MeuComboBox()
+        self.grupo_input.setEditable(True)
+        self.grupo_input.setInsertPolicy(QComboBox.NoInsert)
+        self.grupo_input.lineEdit().setPlaceholderText("Ex: CONCEITO-LEI-OHM")
         col_dir.addWidget(self.grupo_label)
         col_dir.addWidget(self.grupo_input)
         
@@ -403,6 +405,7 @@ class CadastroQuestaoScreen(QWidget):
         layout.addLayout(botoes_layout)
 
         self.disciplina_input.activated.connect(self._atualizar_lista_temas)
+        self.tema_input.currentTextChanged.connect(self._atualizar_grupos_combo)
         self._atualizar_lista_temas()
         self.configurar_modo()
         self.atualizar_ui_formato()
@@ -563,7 +566,31 @@ class CadastroQuestaoScreen(QWidget):
             # Como o ComboBox é editável, isso preserva a informação.
             self.tema_input.setCurrentText(texto_tema_atual)
 
-    # (Dentro da classe CadastroQuestaoWindow, substitua a função inteira por esta)
+    def _atualizar_grupos_combo(self):
+        """
+        Atualiza a combobox de grupos com base na disciplina e no tema selecionados.
+        """
+        # Salva o texto que o usuário pode estar digitando
+        texto_atual = self.grupo_input.currentText()
+
+        self.grupo_input.clear()
+
+        disciplina_nome = self.disciplina_input.currentText()
+        tema_selecionado = self.tema_input.currentText()
+
+        disciplina_id = obter_disciplina_id_por_nome(disciplina_nome)
+
+        # Só busca os grupos se uma disciplina e um tema válidos estiverem selecionados
+        if disciplina_id and tema_selecionado:
+            grupos = obter_grupos_por_tema(disciplina_id, tema_selecionado)
+            if grupos:
+                # Adiciona os grupos encontrados, desabilitando os sinais para evitar loops
+                self.grupo_input.blockSignals(True)
+                self.grupo_input.addItems(grupos)
+                self.grupo_input.blockSignals(False)
+
+        # Restaura o texto que o usuário estava digitando, caso ele não esteja na lista
+        self.grupo_input.setCurrentText(texto_atual)
 
     def carregar_dados_questao(self):
         dados = obter_questao_por_id(self.questao_id)
@@ -571,7 +598,8 @@ class CadastroQuestaoScreen(QWidget):
         
         # --- ETAPA 1: Carrega todos os campos de texto e seleções simples ---
         self.check_ativa.setChecked(bool(dados.get("ativa", 1)))
-        self.grupo_input.setText(dados.get("grupo", ""))
+        self._atualizar_grupos_combo()
+        self.grupo_input.setCurrentText(dados.get("grupo", "")) # Use setCurrentText para QComboBox
         self.check_permitir_negativos.setChecked(bool(dados.get("permitir_negativos", 0)))
         
         formato = dados.get("formato_questao", "Múltipla Escolha")
@@ -584,6 +612,9 @@ class CadastroQuestaoScreen(QWidget):
         
         self._atualizar_lista_temas() # Atualiza a lista de temas com base na disciplina
         self.tema_input.setCurrentText(dados.get("tema", "")) # Agora define o tema
+
+        self._atualizar_grupos_combo() # 1. Popula a lista de grupos
+        self.grupo_input.setCurrentText(dados.get("grupo", ""))
         
         self.dificuldade_combo.setCurrentText(dados.get("dificuldade", "Fácil"))
         self.fonte_input.setText(dados.get("fonte", ""))
@@ -748,7 +779,7 @@ class CadastroQuestaoScreen(QWidget):
             "tema": self.tema_input.currentText().strip(),
             "fonte": self.fonte_input.text().strip(),
             "ativa": int(self.check_ativa.isChecked()),
-            "grupo": self.grupo_input.text().strip(),
+            "grupo": self.grupo_input.currentText().strip(),
             "formato_questao": formato,
             "dificuldade": self.dificuldade_combo.currentText(),
             "enunciado": self.enunciado_input.toPlainText().strip(),

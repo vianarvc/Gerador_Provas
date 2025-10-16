@@ -62,14 +62,29 @@ class ConfiguracoesDialog(QDialog):
         self.campos["email_contato"].setText(config.get("email_contato", ""))
 
     def accept(self):
-        """Salva os dados antes de fechar."""
+        """
+        Valida os campos. Se estiverem OK, salva e fecha.
+        Se não, exibe um aviso e mantém a janela aberta.
+        """
         dados_para_salvar = {
-            "sigla_curso": self.campos["sigla_curso"].text(),
-            "nome_curso": self.campos["nome_curso"].text(),
-            "nome_professor": self.campos["nome_professor"].text(),
-            "nome_escola": self.campos["nome_escola"].text(),
-            "email_contato": self.campos["email_contato"].text()
+            "sigla_curso": self.campos["sigla_curso"].text().strip(),
+            "nome_curso": self.campos["nome_curso"].text().strip(),
+            "nome_professor": self.campos["nome_professor"].text().strip(),
+            "nome_escola": self.campos["nome_escola"].text().strip(),
+            "email_contato": self.campos["email_contato"].text().strip()
         }
+        
+        # --- VALIDAÇÃO ADICIONADA AQUI ---
+        campos_obrigatorios = ["nome_professor", "nome_escola", "sigla_curso", "nome_curso"]
+        for campo in campos_obrigatorios:
+            if not dados_para_salvar.get(campo):
+                QMessageBox.warning(self, "Campos Obrigatórios", 
+                                    f"O campo '{campo.replace('_', ' ').title()}' é obrigatório. "
+                                    "Por favor, preencha todos os campos.")
+                return # Impede o salvamento e o fechamento da janela
+        # --- FIM DA VALIDAÇÃO ---
+
+        # Se a validação passou, o código continua para salvar e fechar
         salvar_configuracoes(dados_para_salvar)
         QMessageBox.information(self, "Sucesso", "Configurações salvas!")
-        super().accept()
+        super().accept() # Chama o método original do QDialog para fechar a janela

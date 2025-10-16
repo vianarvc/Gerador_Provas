@@ -4,15 +4,17 @@ import os, re
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
     QPushButton, QFileDialog, QScrollArea, QMessageBox, QCheckBox,
-    QGroupBox, QGridLayout, QDesktopWidget, QTextEdit, QListWidget, QApplication
+    QGroupBox, QGridLayout, QDesktopWidget, QTextEdit, QListWidget, 
+    QApplication,  QDialog
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QThread
 
 from database import (
     obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, 
-    carregar_configuracoes, buscar_questoes_por_ids
+    carregar_configuracoes, buscar_questoes_por_ids, verificar_configuracoes_essenciais
 )
+from .configuracoes_dialog import ConfiguracoesDialog
 from motor_gerador.core import gerar_versoes_prova
 from gerador_pdf import criar_pdf_provas
 from .custom_widgets import (
@@ -226,6 +228,20 @@ class GeradorPorIdScreen(QWidget):
                 combo_tema.setCurrentIndex(index)
 
     def _gerar_prova(self):
+        # --- BLOCO DE VERIFICAÇÃO ---
+        if not verificar_configuracoes_essenciais():
+            QMessageBox.information(self, "Configuração Necessária", 
+                                    "Informações essenciais para o cabeçalho da prova não foram preenchidas. "
+                                    "Por favor, preencha os dados a seguir.")
+            
+            config_dialog = ConfiguracoesDialog(self)
+            
+            # Pausa a execução e só continua se o usuário salvar (Accepted)
+            if config_dialog.exec_() != QDialog.Accepted:
+                QMessageBox.warning(self, "Operação Cancelada", "Geração cancelada pois as configurações não foram salvas.")
+                return # Cancela a geração
+        # --- FIM DO BLOCO ---
+
         # --- ETAPA 1: Coleta de Dados e Validação ---
         from motor_gerador.cache_manager import iniciar_nova_geracao_cache
         

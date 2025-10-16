@@ -56,7 +56,7 @@ class VisualizarQuestoesScreen(QWidget):
     # --- MUDANÇA 5: Adicionar o método sizeHint ---
     def sizeHint(self):
         """Informa à MainWindow qual o tamanho ideal para esta tela."""
-        return QSize(1100, 750)
+        return QSize(1100, 800)
 
     def _criar_tela_listagem(self):
         widget = QWidget()
@@ -222,6 +222,9 @@ class VisualizarQuestoesScreen(QWidget):
         self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Formato:</b> {questao['formato_questao']}", fonte_normal))
         self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Dificuldade:</b> {questao['dificuldade']}", fonte_normal))
         
+        if questao.get("grupo"):
+            self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Grupo:</b> {questao['grupo']}", fonte_normal))
+
         if questao.get("fonte"):
             self.layout_conteudo_detalhes.addWidget(self.criar_label(f"<b>Fonte:</b> {questao['fonte']}", fonte_normal))
         

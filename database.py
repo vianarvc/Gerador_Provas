@@ -614,3 +614,49 @@ def renomear_tema(nome_antigo, nome_novo):
     finally:
         if conn:
             conn.close()
+
+def obter_grupos_por_tema(disciplina_id, tema):
+    """
+    Busca no banco de dados todos os nomes de grupos únicos
+    associados a uma disciplina e um tema específicos.
+    """
+    if not disciplina_id or not tema:
+        return []
+        
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT DISTINCT grupo FROM questoes 
+            WHERE disciplina_id = ? AND tema = ? AND grupo IS NOT NULL AND grupo != ''
+            ORDER BY grupo
+        """, (disciplina_id, tema))
+        grupos = [row[0] for row in cursor.fetchall()]
+        return grupos
+    except sqlite3.Error as e:
+        print(f"Erro ao buscar grupos por tema: {e}")
+        return []
+    finally:
+        conn.close()
+
+def verificar_configuracoes_essenciais():
+    """
+    Verifica se os campos essenciais para a geração de PDF estão preenchidos.
+    Retorna True se tudo estiver OK, False caso contrário.
+    """
+    config = carregar_configuracoes()
+    
+    # Defina aqui quais chaves são OBRIGATÓRIAS no seu template LaTeX
+    campos_obrigatorios = [
+        "nome_professor",
+        "nome_escola",
+        "sigla_curso",
+        "nome_curso"
+    ]
+    
+    for campo in campos_obrigatorios:
+        # Verifica se o campo não existe, ou se existe mas está vazio ou só com espaços
+        if not config.get(campo, "").strip():
+            return False # Encontrou um campo essencial faltando
+            
+    return True # Todos os campos essenciais estão preenchidos

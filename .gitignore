@@ -1,6 +1,31 @@
-# Crie/edite o arquivo .gitignore
-echo ".vscode/" >> .gitignore
-echo "__pycache__/" >> .gitignore
-echo "venv/" >> .gitignore
-echo "*.db" >> .gitignore
-echo "img/clip_*.png" >> .gitignore
+# .gitignore
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Banco de dados
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Projeto específico
+imagens_questoes/
+img/clip_*.png
+"Versões_anteriores/"

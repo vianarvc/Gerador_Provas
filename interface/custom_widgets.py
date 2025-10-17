@@ -3,9 +3,10 @@
 from PyQt5.QtWidgets import (
     QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, 
     QPushButton, QLabel, QGroupBox, QSlider, QCheckBox, 
-    QTextEdit, QTableWidget, QToolButton
+    QTextEdit, QTableWidget, QToolButton, QCompleter,
+    QMessageBox
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 class NoScrollComboBox(QComboBox):
     """
@@ -259,6 +260,38 @@ class MeuComboBox(NoScrollComboBox):
             padding: 5px;
             background-color: white;
         """)
+
+'''class MeuComboEditavel(NoScrollComboBox):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            border: 1px solid #bdc3c7;
+            border-radius: 5px;
+            padding: 5px;
+            background-color: white;
+        """)
+        
+        # ✅ Inicia como NÃO editável - comportamento normal
+        self.setEditable(False)
+        
+    def mouseDoubleClickEvent(self, event):
+        """Clique duplo: torna editável e habilita edição"""
+        if event.button() == Qt.LeftButton:
+            self.setEditable(True)
+            self.lineEdit().selectAll()
+            self.lineEdit().setFocus()
+            
+            # ✅ Alternativa: observar perda de foco em vez de editingFinished
+            self.lineEdit().focusOutEvent = self._handle_focus_out
+            
+        super().mouseDoubleClickEvent(event)
+
+    def _handle_focus_out(self, event):
+        """Quando perde foco, volta a ser não-editável"""
+        self.setEditable(False)
+        # Restaura o focusOutEvent original
+        self.lineEdit().focusOutEvent = super().lineEdit().focusOutEvent
+        super().lineEdit().focusOutEvent(event)'''
 
 class MeuCheckBox(QCheckBox):
     def __init__(self, parent=None):

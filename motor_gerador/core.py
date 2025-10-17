@@ -448,3 +448,62 @@ def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, l
     except Exception as e:
         log_message(f"ERRO ao gerar cardápio: {e}")
         return False, f"Ocorreu um erro: {e}"
+    
+def gerar_prova_por_ids(ids_questoes, num_versoes=1, config_geral=None):
+    """
+    Gera provas a partir de IDs específicos, considerando grupos
+    """
+    try:
+        from database import buscar_questoes_por_ids, obter_questoes_do_grupo
+        
+        # Buscar questões base pelos IDs
+        questões_encontradas = buscar_questoes_por_ids(ids_questoes)
+        
+        if not questões_encontradas:
+            return []  # ✅ RETORNAR LISTA VAZIA
+        
+        versoes_provas = []
+        info_grupos = {}
+        
+        # Identificar grupos
+        for questao in questões_encontradas:
+            grupo = questao.get('grupo', '').strip()
+            
+            if grupo and grupo not in info_grupos:
+                grupo_questoes = obter_questoes_do_grupo(grupo, questao.get('disciplina_id'))
+                if grupo_questoes:
+                    info_grupos[grupo] = {
+                        'questoes': grupo_questoes,
+                        'total_questoes': len(grupo_questoes)
+                    }
+        
+        # Gerar cada versão
+        for num_prova in range(1, num_versoes + 1):
+            prova_versao = []
+            
+            for questao in questões_encontradas:
+                grupo = questao.get('grupo', '').strip()
+                
+                if grupo and grupo in info_grupos:
+                    grupo_info = info_grupos[grupo]
+                    indice = (num_prova - 1) % grupo_info['total_questoes']
+                    questao_selecionada = grupo_info['questoes'][indice]
+                    prova_versao.append(questao_selecionada)
+                else:
+                    prova_versao.append(questao)
+            
+            # Gerar variantes
+            prova_com_variantes = []
+            for i, questao in enumerate(prova_versao):
+                seed = f"{num_prova}_{questao['id']}_{i}"
+                variante = _gerar_variante_questao(questao, seed=seed)
+                if variante:
+                    prova_com_variantes.append(variante)
+            
+            versoes_provas.append(prova_com_variantes)
+        
+        return versoes_provas  # ✅ RETORNAR APENAS A LISTA DE VERSÕES
+        
+    except Exception as e:
+        print(f"Erro em gerar_prova_por_ids: {e}")
+        return []  # ✅ SEMPRE RETORNAR LISTA

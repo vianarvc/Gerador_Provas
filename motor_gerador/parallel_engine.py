@@ -8,9 +8,6 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from itertools import groupby
 from collections import Counter
 
-from .cache_manager import calculation_cache
-
-
 def _gerar_versao_unica_wrapper(args):
     """
     Wrapper para gerar uma única versão em processo separado

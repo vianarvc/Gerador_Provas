@@ -176,9 +176,6 @@ def gerar_pdf_cardapio(questoes, caminho_saida, template_file, contexto_extra, l
             
     try:
         # ⭐ NOVO: Inicia nova geração de cache para o cardápio
-        from motor_gerador.cache_manager import iniciar_nova_geracao_cache
-        iniciar_nova_geracao_cache("cardapio_questoes")
-        
         log_message("Iniciando a geração do cardápio de questões com filtros...")
 
         # ... (o resto da função continua exatamente igual à que eu te enviei antes)

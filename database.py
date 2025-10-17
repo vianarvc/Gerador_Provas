@@ -660,3 +660,43 @@ def verificar_configuracoes_essenciais():
             return False # Encontrou um campo essencial faltando
             
     return True # Todos os campos essenciais estão preenchidos
+
+def atualizar_imagem_questao(questao_id, caminho_imagem):
+    """
+    Atualiza apenas o campo imagem de uma questão específica
+    """
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE questoes SET imagem = ? WHERE id = ?", (caminho_imagem, questao_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Erro ao atualizar imagem da questão {questao_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def obter_questoes_do_grupo(grupo, disciplina_id=None):
+    """
+    Busca todas as questões ATIVAS de um grupo específico
+    """
+    if not grupo:
+        return []
+        
+    conn = connect_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    conditions = ["grupo = ?", "ativa = 1"]
+    params = [grupo]
+    
+    if disciplina_id is not None:
+        conditions.append("disciplina_id = ?")
+        params.append(disciplina_id)
+        
+    query = "SELECT * FROM questoes WHERE " + " AND ".join(conditions) + " ORDER BY id"
+    cursor.execute(query, params)
+    questoes = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return questoes

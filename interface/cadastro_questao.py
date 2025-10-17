@@ -4,19 +4,19 @@ import json, os, re
 from textwrap import dedent
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit, 
-    QPushButton, QScrollArea, QMessageBox, QStackedWidget,
+    QPushButton, QScrollArea, QMessageBox, QStackedWidget, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QGroupBox, QApplication,
     QToolButton, QRadioButton, QButtonGroup, QDesktopWidget, QGridLayout, QComboBox
 )
 from PyQt5.QtGui import QFont, QPixmap, QSyntaxHighlighter, QTextCharFormat, QColor
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from database import salvar_questao, obter_questao_por_id, atualizar_questao, obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, salvar_disciplina, obter_disciplina_nome_por_id, obter_grupos_por_tema
+from database import salvar_questao, obter_questao_por_id, atualizar_questao, obter_temas, obter_disciplinas, obter_disciplina_id_por_nome, salvar_disciplina, obter_disciplina_nome_por_id, obter_grupos_por_tema, atualizar_imagem_questao
 import gerenciador_imagens
 from .custom_widgets import (
     MeuBotao, MeuLineEdit, MeuComboBox, MeuGroupBox, MeuLabel, 
     MeuTableWidget, MeuToolButton, MeuCheckBox, MeuTextEdit, 
-    MeuSpinBox, NoScrollSlider, NoScrollComboBox, MeuImagemPreviewLabel
-)
+    MeuSpinBox, NoScrollSlider, NoScrollComboBox, MeuImagemPreviewLabel,
+    )
 import random
 import io
 import sys
@@ -802,7 +802,7 @@ class CadastroQuestaoScreen(QWidget):
             dados_questao["resposta_correta"] = "Verdadeiro" if self.vf_verdadeiro_radio.isChecked() else "Falso"
 
         # --- ETAPA 5: Salvar ou Atualizar no Banco de Dados ---
-        try:
+        '''try:
             if self.questao_id:
                 atualizar_questao(self.questao_id, dados_questao)
                 QMessageBox.information(self, "Sucesso", "Questão atualizada com sucesso!")
@@ -815,7 +815,46 @@ class CadastroQuestaoScreen(QWidget):
             self.cadastro_concluido.emit(questao_id_salva)  # ← AGORA COM PARÂMETRO
             
         except Exception as e:
-            QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")
+            QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")'''
+        
+        # --- ETAPA 5: Salvar ou Atualizar no Banco de Dados ---
+        # --- ETAPA 5: Salvar ou Atualizar no Banco de Dados ---
+        try:
+            # ✅ PRIMEIRO: Salva questão SEM imagem para obter ID real
+            dados_sem_imagem = dados_questao.copy()
+            dados_sem_imagem['imagem'] = ""
+            
+            if self.questao_id:
+                atualizar_questao(self.questao_id, dados_sem_imagem)
+                questao_id_salva = self.questao_id
+            else:
+                questao_id_salva = salvar_questao(dados_sem_imagem)
+
+            # ✅ SEGUNDO: Processa imagem COM ID real
+            caminho_imagem_final = ""
+            if hasattr(self, 'imagem_path_original') and self.imagem_path_original:
+                # Imagem de arquivo - processa com ID real
+                caminho_imagem_final = gerenciador_imagens.processar_imagem_questao(
+                    self.imagem_path_original, 
+                    questao_id_salva,
+                    "img"
+                )
+            elif hasattr(self, 'imagem_pixmap') and self.imagem_pixmap:
+                # Imagem do clipboard - salva com ID real
+                caminho_imagem_final = gerenciador_imagens.salvar_pixmap(
+                    self.imagem_pixmap, 
+                    f"questao_{questao_id_salva}"
+                )
+
+            # ✅ TERCEIRO: Atualiza questão com caminho correto
+            if caminho_imagem_final:
+                atualizar_imagem_questao(questao_id_salva, caminho_imagem_final)
+
+            QMessageBox.information(self, "Sucesso", "Questão salva com sucesso!")
+            self.cadastro_concluido.emit(questao_id_salva)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao salvar: {e}")
     
     def _criar_botao_formatacao(self, text, func, tooltip):
         btn = MeuToolButton()
@@ -905,7 +944,7 @@ class CadastroQuestaoScreen(QWidget):
             self.imagem_preview_label.setText("Nenhuma imagem selecionada.")
             self.imagem_preview_label.setPixmap(QPixmap())
     
-    def _inserir_imagem_arquivo(self):
+    '''def _inserir_imagem_arquivo(self):
         novo_caminho = gerenciador_imagens.selecionar_e_copiar_imagem()
         if novo_caminho:
             gerenciador_imagens.remover_imagem(self.imagem_path)
@@ -921,6 +960,29 @@ class CadastroQuestaoScreen(QWidget):
                 gerenciador_imagens.remover_imagem(self.imagem_path) 
                 self.imagem_path = novo_caminho
                 self._atualizar_preview_imagem()
+        else: 
+            QMessageBox.warning(self, "Aviso", "Nenhuma imagem na área de transferência.")'''
+    
+    def _inserir_imagem_arquivo(self):
+        """Seleciona imagem mas NÃO copia para pasta img ainda"""
+        caminho_original, _ = QFileDialog.getOpenFileName(
+            self, "Selecionar Imagem", "", 
+            "Imagens (*.png *.jpg *.jpeg *.bmp *.gif)"
+        )
+        if caminho_original:
+            # ✅ Só guarda o caminho original, NÃO processa ainda
+            self.imagem_path_original = caminho_original
+            self._atualizar_preview_imagem()
+
+    def _colar_imagem_clipboard(self):
+        """Cola imagem mas NÃO salva na pasta img ainda"""
+        clipboard = QApplication.clipboard()
+        pixmap = clipboard.pixmap()
+        if not pixmap.isNull():
+            # ✅ Só guarda o pixmap, NÃO salva ainda
+            self.imagem_pixmap = pixmap
+            self.imagem_path_original = ""  # Indica que veio do clipboard
+            self._atualizar_preview_imagem()
         else: 
             QMessageBox.warning(self, "Aviso", "Nenhuma imagem na área de transferência.")
     

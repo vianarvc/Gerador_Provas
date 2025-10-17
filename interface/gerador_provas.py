@@ -306,10 +306,7 @@ class GeradorProvasScreen(QWidget):
         # --- FIM DO BLOCO ---
 
         # --- ETAPA 1: Coleta de Dados e Validação (Executa na Thread Principal) ---
-        from motor_gerador.cache_manager import iniciar_nova_geracao_cache
-        
         nome_prova = self.nome_input.text().strip() or "Prova_Sem_Nome"
-        iniciar_nova_geracao_cache(f"prova_{nome_prova}")
         
         disciplina_id = obter_disciplina_id_por_nome(self.disciplina_combo.currentText())
         if not disciplina_id:

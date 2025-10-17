@@ -242,11 +242,8 @@ class GeradorPorIdScreen(QWidget):
                 return # Cancela a geração
         # --- FIM DO BLOCO ---
 
-        # --- ETAPA 1: Coleta de Dados e Validação ---
-        from motor_gerador.cache_manager import iniciar_nova_geracao_cache
-        
+        # --- ETAPA 1: Coleta de Dados e Validação ---    
         nome_prova = self.nome_input.text().strip() or "Prova_Por_ID"
-        iniciar_nova_geracao_cache(f"prova_id_{nome_prova}")
         
         ids_texto = self.ids_input.toPlainText().strip()
         if not ids_texto:

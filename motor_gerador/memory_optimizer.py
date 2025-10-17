@@ -8,9 +8,6 @@ from itertools import product
 from typing import Dict, List, Set, Any, Tuple
 import hashlib
 
-from .cache_manager import calculation_cache
-
-
 class CombinatorialEngine:
     """Motor otimizado para questões com alto número de combinações - FOCADO EM ELETROTÉCNICA"""
     
@@ -291,31 +288,18 @@ class CombinatorialEngine:
 
 def _gerar_pool_combinatorio(questao_base, params_code, base_context):
     """
-    SUBSTITUIÇÃO OTIMIZADA COM CACHE: Usa o CombinatorialEngine com cache
+    ✅ VERSÃO SEM CACHE: Usa o CombinatorialEngine diretamente
     """
-    # Gera chave única para cache baseada no conteúdo
     questao_id = questao_base.get('id', 'N/A')
-    cache_key = f"pool_{questao_id}_{hashlib.md5(params_code.encode()).hexdigest()[:16]}"
+    print(f"   🔄 Processando - Questão {questao_id}")
     
-    # Tenta obter do cache primeiro
-    cached_result = calculation_cache.get(cache_key)
-    if cached_result is not None:
-        print(f"   💾 Cache HIT - Questão {questao_id}")
-        return cached_result
-    
-    print(f"   🔄 Cache MISS - Questão {questao_id}")
-    
-    # Se não tem cache, processa normalmente
+    # Processa normalmente sem cache
     engine = CombinatorialEngine(
         max_combinations=20000,
         max_sample=200
     )
     
     result = engine.generate_smart_pool(questao_base, params_code, base_context)
-    
-    # Armazena no cache (apenas se não for None)
-    if result is not None:
-        calculation_cache.set(cache_key, result)
     
     return result
 

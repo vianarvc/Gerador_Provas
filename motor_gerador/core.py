@@ -452,6 +452,7 @@ def gerar_cardapio_questoes(caminho_salvar_pdf, disciplina_id=None, tema=None, l
 def gerar_prova_por_ids(ids_questoes, num_versoes=1, config_geral=None):
     """
     Gera provas a partir de IDs específicos, considerando grupos
+    REPLICA EXATAMENTE a lógica de rotação do parallel_engine
     """
     try:
         from database import buscar_questoes_por_ids, obter_questoes_do_grupo
@@ -460,7 +461,7 @@ def gerar_prova_por_ids(ids_questoes, num_versoes=1, config_geral=None):
         questões_encontradas = buscar_questoes_por_ids(ids_questoes)
         
         if not questões_encontradas:
-            return []  # ✅ RETORNAR LISTA VAZIA
+            return []
         
         versoes_provas = []
         info_grupos = {}
@@ -468,7 +469,6 @@ def gerar_prova_por_ids(ids_questoes, num_versoes=1, config_geral=None):
         # Identificar grupos
         for questao in questões_encontradas:
             grupo = questao.get('grupo', '').strip()
-            
             if grupo and grupo not in info_grupos:
                 grupo_questoes = obter_questoes_do_grupo(grupo, questao.get('disciplina_id'))
                 if grupo_questoes:
@@ -477,13 +477,35 @@ def gerar_prova_por_ids(ids_questoes, num_versoes=1, config_geral=None):
                         'total_questoes': len(grupo_questoes)
                     }
         
+        # Configurações
+        if config_geral:
+            gabarito_config = config_geral.get('gabarito', {})
+            distribuir_gabarito = gabarito_config.get('distribuir', True)
+            rotacao_gabarito = gabarito_config.get('rotacao', 1)
+            embaralhar_questoes = gabarito_config.get('embaralhar_questoes', False)
+        else:
+            distribuir_gabarito = True
+            rotacao_gabarito = 1
+            embaralhar_questoes = False
+        
+        # ⭐⭐ PREPARAR GABARITO BALANCEADO (igual ao parallel_engine)
+        num_questoes_me = sum(1 for q in questões_encontradas if q.get('formato_questao') == 'Múltipla Escolha')
+        
+        if num_questoes_me == 1:
+            gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"])]
+        elif distribuir_gabarito:
+            gabarito_me_v1 = _gerar_gabarito_distribuido(num_questoes_me)
+            random.shuffle(gabarito_me_v1)
+        else:
+            gabarito_me_v1 = [random.choice(["A", "B", "C", "D", "E"]) for _ in range(num_questoes_me)]
+        
         # Gerar cada versão
         for num_prova in range(1, num_versoes + 1):
             prova_versao = []
             
+            # Selecionar questões (com rotação de grupos)
             for questao in questões_encontradas:
                 grupo = questao.get('grupo', '').strip()
-                
                 if grupo and grupo in info_grupos:
                     grupo_info = info_grupos[grupo]
                     indice = (num_prova - 1) % grupo_info['total_questoes']
@@ -492,18 +514,71 @@ def gerar_prova_por_ids(ids_questoes, num_versoes=1, config_geral=None):
                 else:
                     prova_versao.append(questao)
             
-            # Gerar variantes
+            # Gerar variantes com seed ÚNICA por versão
             prova_com_variantes = []
+            contador_me = 0
+            
             for i, questao in enumerate(prova_versao):
-                seed = f"{num_prova}_{questao['id']}_{i}"
+                # SEED ÚNICA: inclui num_prova para variar entre versões
+                seed = f"versao_{num_prova}_questao_{questao['id']}_index_{i}"
                 variante = _gerar_variante_questao(questao, seed=seed)
-                if variante:
-                    prova_com_variantes.append(variante)
+                
+                if not variante:
+                    continue
+                    
+                questao_final = variante.copy()
+                
+                # ⭐⭐ ROTAÇÃO DE ALTERNATIVAS (IGUAL AO PARALLEL_ENGINE)
+                if variante['formato_questao'] == 'Múltipla Escolha':
+                    num_alternativas = variante.get('num_alternativas', 5)
+                    letras_disponiveis = ["A", "B", "C", "D", "E"][:num_alternativas]
+                    
+                    # Determinar letra correta para esta versão
+                    if num_prova == 1:
+                        letra_correta_sorteada = gabarito_me_v1[contador_me]
+                    else:
+                        letra_original = gabarito_me_v1[contador_me]
+                        letra_correta_sorteada = _rotacionar_letra(letra_original, rotacao_gabarito * (num_prova - 1))
+                    
+                    idx_sorteado = ["A", "B", "C", "D", "E"].index(letra_correta_sorteada)
+                    letra_correta_final = letras_disponiveis[idx_sorteado % num_alternativas]
+                    
+                    alternativas = list(variante["alternativas_valores"])
+                    resposta_valor = variante["resposta_valor"]
+                    
+                    if not alternativas or resposta_valor is None:
+                        continue
+
+                    # ⭐⭐ EMBARALHAR E POSICIONAR RESPOSTA (CÓDIGO CRÍTICO)
+                    random.Random(seed).shuffle(alternativas)
+                    
+                    try:
+                        idx_correta_atual = alternativas.index(resposta_valor)
+                        idx_alvo = letras_disponiveis.index(letra_correta_final)
+                        # Trocar a resposta correta para a posição da letra do gabarito
+                        alternativas[idx_correta_atual], alternativas[idx_alvo] = alternativas[idx_alvo], alternativas[idx_correta_atual]
+                    except (ValueError, IndexError):
+                        print(f"Aviso: não foi possível posicionar a resposta para a questão ID {variante['id_base']}")
+                    
+                    questao_final["gabarito"] = letra_correta_final
+                    questao_final["alternativas"] = {letra: texto for letra, texto in zip(letras_disponiveis, alternativas)}
+                    contador_me += 1
+                    
+                elif variante['formato_questao'] == 'Verdadeiro ou Falso':
+                    questao_final["gabarito"] = "V" if variante["resposta_valor"] == "Verdadeiro" else "F"
+                else:  # Discursiva
+                    questao_final["gabarito"] = "D"
+                
+                prova_com_variantes.append(questao_final)
+            
+            # ⭐⭐ EMBARALHAR QUESTÕES (se configurado)
+            if embaralhar_questoes:
+                random.Random(num_prova).shuffle(prova_com_variantes)
             
             versoes_provas.append(prova_com_variantes)
         
-        return versoes_provas  # ✅ RETORNAR APENAS A LISTA DE VERSÕES
+        return versoes_provas
         
     except Exception as e:
         print(f"Erro em gerar_prova_por_ids: {e}")
-        return []  # ✅ SEMPRE RETORNAR LISTA
+        return []

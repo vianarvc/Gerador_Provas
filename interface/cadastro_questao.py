@@ -773,6 +773,8 @@ class CadastroQuestaoScreen(QWidget):
             parametros_finais = ""
             tipo_questao_final = ""
 
+        print(f"DEBUG (salvar): Valor de self.imagem_path ANTES de criar dados_questao: '{self.imagem_path}'")
+
         # --- ETAPA 4: Montar o dicionário final com todos os dados ---
         dados_questao = {
             "disciplina_id": disciplina_id,
@@ -802,7 +804,7 @@ class CadastroQuestaoScreen(QWidget):
             dados_questao["resposta_correta"] = "Verdadeiro" if self.vf_verdadeiro_radio.isChecked() else "Falso"
 
         # --- ETAPA 5: Salvar ou Atualizar no Banco de Dados ---
-        '''try:
+        try:
             if self.questao_id:
                 atualizar_questao(self.questao_id, dados_questao)
                 QMessageBox.information(self, "Sucesso", "Questão atualizada com sucesso!")
@@ -815,46 +817,7 @@ class CadastroQuestaoScreen(QWidget):
             self.cadastro_concluido.emit(questao_id_salva)  # ← AGORA COM PARÂMETRO
             
         except Exception as e:
-            QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")'''
-        
-        # --- ETAPA 5: Salvar ou Atualizar no Banco de Dados ---
-        # --- ETAPA 5: Salvar ou Atualizar no Banco de Dados ---
-        try:
-            # ✅ PRIMEIRO: Salva questão SEM imagem para obter ID real
-            dados_sem_imagem = dados_questao.copy()
-            dados_sem_imagem['imagem'] = ""
-            
-            if self.questao_id:
-                atualizar_questao(self.questao_id, dados_sem_imagem)
-                questao_id_salva = self.questao_id
-            else:
-                questao_id_salva = salvar_questao(dados_sem_imagem)
-
-            # ✅ SEGUNDO: Processa imagem COM ID real
-            caminho_imagem_final = ""
-            if hasattr(self, 'imagem_path_original') and self.imagem_path_original:
-                # Imagem de arquivo - processa com ID real
-                caminho_imagem_final = gerenciador_imagens.processar_imagem_questao(
-                    self.imagem_path_original, 
-                    questao_id_salva,
-                    "img"
-                )
-            elif hasattr(self, 'imagem_pixmap') and self.imagem_pixmap:
-                # Imagem do clipboard - salva com ID real
-                caminho_imagem_final = gerenciador_imagens.salvar_pixmap(
-                    self.imagem_pixmap, 
-                    f"questao_{questao_id_salva}"
-                )
-
-            # ✅ TERCEIRO: Atualiza questão com caminho correto
-            if caminho_imagem_final:
-                atualizar_imagem_questao(questao_id_salva, caminho_imagem_final)
-
-            QMessageBox.information(self, "Sucesso", "Questão salva com sucesso!")
-            self.cadastro_concluido.emit(questao_id_salva)
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao salvar: {e}")
+            QMessageBox.critical(self, "Erro no Banco de Dados", f"Não foi possível salvar a questão:\n{e}")
     
     def _criar_botao_formatacao(self, text, func, tooltip):
         btn = MeuToolButton()
@@ -949,9 +912,19 @@ class CadastroQuestaoScreen(QWidget):
         if novo_caminho:
             gerenciador_imagens.remover_imagem(self.imagem_path)
             self.imagem_path = novo_caminho
+            self._atualizar_preview_imagem()'''
+    
+    def _inserir_imagem_arquivo(self):
+        novo_caminho = gerenciador_imagens.selecionar_e_copiar_imagem()
+        if novo_caminho:
+            # --- CORREÇÃO: Só remove se existia uma imagem antes ---
+            if self.imagem_path:
+                gerenciador_imagens.remover_imagem(self.imagem_path)
+            # --- FIM DA CORREÇÃO ---
+            self.imagem_path = novo_caminho
             self._atualizar_preview_imagem()
     
-    def _colar_imagem_clipboard(self):
+    '''def _colar_imagem_clipboard(self):
         clipboard = QApplication.clipboard()
         pixmap = clipboard.pixmap()
         if not pixmap.isNull():
@@ -962,34 +935,37 @@ class CadastroQuestaoScreen(QWidget):
                 self._atualizar_preview_imagem()
         else: 
             QMessageBox.warning(self, "Aviso", "Nenhuma imagem na área de transferência.")'''
-    
-    def _inserir_imagem_arquivo(self):
-        """Seleciona imagem mas NÃO copia para pasta img ainda"""
-        caminho_original, _ = QFileDialog.getOpenFileName(
-            self, "Selecionar Imagem", "", 
-            "Imagens (*.png *.jpg *.jpeg *.bmp *.gif)"
-        )
-        if caminho_original:
-            # ✅ Só guarda o caminho original, NÃO processa ainda
-            self.imagem_path_original = caminho_original
-            self._atualizar_preview_imagem()
 
     def _colar_imagem_clipboard(self):
-        """Cola imagem mas NÃO salva na pasta img ainda"""
         clipboard = QApplication.clipboard()
         pixmap = clipboard.pixmap()
         if not pixmap.isNull():
-            # ✅ Só guarda o pixmap, NÃO salva ainda
-            self.imagem_pixmap = pixmap
-            self.imagem_path_original = ""  # Indica que veio do clipboard
-            self._atualizar_preview_imagem()
+            novo_caminho = gerenciador_imagens.salvar_pixmap(pixmap)
+            if novo_caminho:
+                # --- CORREÇÃO: Só remove se existia uma imagem antes ---
+                if self.imagem_path:
+                    gerenciador_imagens.remover_imagem(self.imagem_path)
+                # --- FIM DA CORREÇÃO ---
+                self.imagem_path = novo_caminho
+                self._atualizar_preview_imagem()
+            # Adicione feedback se salvar_pixmap falhar
+            else:
+                 QMessageBox.warning(self, "Erro", "Não foi possível salvar a imagem da área de transferência.")
         else: 
             QMessageBox.warning(self, "Aviso", "Nenhuma imagem na área de transferência.")
     
-    def _remover_imagem(self):
+    '''def _remover_imagem(self):
         gerenciador_imagens.remover_imagem(self.imagem_path)
         self.imagem_path = ""
-        self._atualizar_preview_imagem()
+        self._atualizar_preview_imagem()'''
+    
+    def _remover_imagem(self):
+        if self.imagem_path:
+            gerenciador_imagens.remover_imagem(self.imagem_path)
+            self.imagem_path = ""
+            self._atualizar_preview_imagem()
+        else:
+            QMessageBox.information(self, "Aviso", "Nenhuma imagem selecionada para remover.")
     
     def _remover_linha_tabela(self):
         row = self.tabela_vars.currentRow()
@@ -1000,14 +976,32 @@ class CadastroQuestaoScreen(QWidget):
         self.widget_alternativas_manuais.setDisabled(checked)
         self.atualizar_ui_formato()
     
-    def configurar_modo(self):
-        if self.questao_id: 
-            self.titulo_label.setText("Editar Questão")
+    def configurar_modo(self, questao_id=None): # Adicione o parâmetro questao_id se ele não estiver lá
+        self.questao_id = questao_id # Garanta que o ID seja atualizado
+
+        if self.questao_id:
+            self.titulo_label.setText(f"Editar Questão (ID: {self.questao_id})") # Use f-string para incluir o ID
             self.btn_salvar.setText("💾 Salvar Alterações")
-            self.carregar_dados_questao()
+            # --- LIMPEZA ANTES DE CARREGAR ---
+            # É uma boa prática limpar antes de carregar dados de edição também
+            self.imagem_path = ""
+            self._atualizar_preview_imagem()
+            # --- FIM DA LIMPEZA ---
+            self.carregar_dados_questao() # Carrega os dados da questão existente
         else:
             self.titulo_label.setText("Cadastrar Nova Questão")
             self.btn_salvar.setText("💾 Salvar Questão")
+
+            # --- ADIÇÃO CRÍTICA AQUI ---
+            # Limpa o caminho da imagem e a preview ao iniciar um NOVO cadastro
+            self.imagem_path = ""
+            self._atualizar_preview_imagem()
+            self.largura_slider.setValue(40) # Reseta o slider para o padrão
+            # --- FIM DA ADIÇÃO ---
+
+            # Chame aqui sua função que limpa os outros campos (enunciado, tema, etc.)
+            #self._limpar_formulario()
+            # Se essa função já limpa a imagem, ótimo. Mas adicionar aqui garante.
 
     def _formatar_latex_para_html(self, texto_latex):
         """
@@ -1177,7 +1171,9 @@ class CadastroQuestaoScreen(QWidget):
         self.fonte_input.clear()
         self.enunciado_input.clear()
         
-        self._remover_imagem()
+        self.imagem_path = ""             # Apenas limpa a referência na memória
+        self._atualizar_preview_imagem()  # Atualiza a UI para mostrar "Nenhuma imagem"
+        self.largura_slider.setValue(40)
         
         # Antes de acessar os widgets das "páginas", verifica se eles existem
         if hasattr(self, 'parametros_input'):

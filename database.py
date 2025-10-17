@@ -7,6 +7,7 @@ import os
 import shutil
 import uuid  
 from datetime import datetime
+from collections import Counter
 
 DB_NAME = 'banco_questoes.db'
 SETTINGS_FILE = 'settings.json'
@@ -277,65 +278,85 @@ def contar_questoes_por_criterio(tema, formato, dificuldade, disciplina_id=None)
 
 def buscar_questoes_para_prova(criterios_granulares, num_versoes=1):
     """
-    Busca questões no banco de dados com base em critérios granulares e tenta
-    garantir que haja questões suficientes para as versões.
-    
-    Retorna uma lista de questões base e uma lista de avisos.
+    Busca questões no banco de dados com base em critérios granulares.
+    Retorna uma lista de questões (como dicts) e uma lista de avisos (strings).
+    Adiciona resumo solicitado vs encontrado e contagem por grupo para diagnóstico.
     """
     conn = connect_db()
     conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
     questoes_base = []
     avisos = []
-    
-    criterios = []
-    # --- INÍCIO DA CORREÇÃO ---
-    # A 'chave_criterio' agora é uma tupla: (disciplina_id, tema)
-    for chave_criterio, formatos in criterios_granulares.items():
-        disciplina_id, tema = chave_criterio
 
+    # Converte o dicionário de critérios em uma lista plana de critérios individuais
+    criterios = []
+    for chave_criterio, formatos in criterios_granulares.items():
+        # chave_criterio é (disciplina_id, tema)
+        disciplina_id, tema = chave_criterio
         for formato, dificuldades in formatos.items():
             for dificuldade, quantidade in dificuldades.items():
-                if quantidade > 0:
+                if quantidade and quantidade > 0:
                     criterios.append({
-                        'tema': tema, 
+                        'tema': tema,
                         'disciplina_id': disciplina_id,
-                        'formato': formato, 
-                        'dificuldade': dificuldade, 
+                        'formato': formato,
+                        'dificuldade': dificuldade,
                         'quantidade': quantidade
                     })
-    # --- FIM DA CORREÇÃO ---
-    
+
+    # Executa uma query para cada critério coletado
     for criterio in criterios:
         tema = criterio['tema']
         disciplina_id = criterio['disciplina_id']
         formato = criterio['formato']
         dificuldade = criterio['dificuldade']
         quantidade_necessaria = criterio['quantidade']
-        
+
         conditions = ["formato_questao = ?", "dificuldade = ?", "ativa = 1"]
         params = [formato, dificuldade]
 
-        if tema != "Todos":
+        if tema and tema not in ("Todos", "Todas"):
             conditions.append("tema = ?")
             params.append(tema)
-        
+
         if disciplina_id is not None:
             conditions.append("disciplina_id = ?")
             params.append(disciplina_id)
-            
+
+        # Seleciona aleatoriamente até a quantidade necessária
         query = "SELECT * FROM questoes WHERE " + " AND ".join(conditions) + " ORDER BY RANDOM() LIMIT ?"
         params.append(quantidade_necessaria)
-            
-        cursor = conn.cursor()
+
         cursor.execute(query, params)
-        questoes_encontradas = [dict(row) for row in cursor.fetchall()]
-        
+        rows = cursor.fetchall()
+        questoes_encontradas = [dict(row) for row in rows]
+
         if len(questoes_encontradas) < quantidade_necessaria:
-            nome_disciplina_aviso = obter_disciplina_nome_por_id(disciplina_id) or "Geral"
-            avisos.append(f"AVISO: Apenas {len(questoes_encontradas)} de {quantidade_necessaria} questões encontradas para [{nome_disciplina_aviso} / {tema} / {formato} / {dificuldade}].")
-        
+            nome_disciplina = obter_disciplina_nome_por_id(disciplina_id) or "Geral"
+            avisos.append(f"AVISO: Apenas {len(questoes_encontradas)} de {quantidade_necessaria} questões encontradas para [{nome_disciplina} / {tema} / {formato} / {dificuldade}].")
+
         questoes_base.extend(questoes_encontradas)
-            
+
+    # Resumo solicitado vs encontrado
+    total_solicitado = sum(c['quantidade'] for c in criterios) if criterios else 0
+    total_encontrado = len(questoes_base)
+    avisos.append(f"RESUMO: solicitado={total_solicitado}, encontrados={total_encontrado}")
+
+    # Contagem por grupo (ajuda a diagnosticar a limitação de 1 por grupo)
+    grupos = [q.get("grupo") for q in questoes_base]
+    grupo_counter = Counter(grupos)
+    # adiciona uma linha de resumo por grupo aos avisos (somente grupos não vazios)
+    grupos_info = {g: cnt for g, cnt in grupo_counter.items() if g is not None}
+    if grupos_info:
+        avisos.append(f"RESUMO_GRUPOS: grupos_unicos={len(grupos_info)}, distribuicao={dict(grupos_info)}")
+
+    # Logs de debug no console (úteis durante desenvolvimento)
+    print("DEBUG buscar_questoes_para_prova: total_solicitado =", total_solicitado)
+    print("DEBUG buscar_questoes_para_prova: total_encontrado =", total_encontrado)
+    if grupos_info:
+        print("DEBUG buscar_questoes_para_prova: distribuicao_por_grupo =", grupos_info)
+
     conn.close()
     return questoes_base, avisos
 

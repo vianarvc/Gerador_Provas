@@ -22,7 +22,7 @@ from .custom_widgets import (
     NoScrollComboBox, NoScrollSpinBox, NoScrollDoubleSpinBox, MeuCheckBox, MeuBotao
 )
 from .log_dialog import LogDialog
-from .worker_gerador import GeradorWorker
+from .worker_gerador import GeradorPorIdWorker, GeradorWorker
 
 class GeradorPorIdScreen(QWidget):
     voltar_pressed = pyqtSignal()
@@ -250,37 +250,35 @@ class GeradorPorIdScreen(QWidget):
             QMessageBox.warning(self, "Atenção", "Por favor, insira pelo menos um ID de questão.")
             return
 
-        ids_texto = self.ids_input.toPlainText().strip()
-        if not ids_texto:
-            QMessageBox.warning(self, "Atenção", "Por favor, insira pelo menos um ID de questão.")
-            return
-        
         try:
-            lista_ids = [int(id_str.strip()) for id_str in ids_texto.split(',')]
+            lista_ids = [int(id_str.strip()) for id_str in re.findall(r'\d+', ids_texto)]
         except ValueError:
-            QMessageBox.critical(self, "Erro de Formato", "IDs inválidos. Por favor, insira apenas números separados por vírgula.")
+            QMessageBox.critical(self, "Erro de Formato", "IDs inválidos. Por favor, insira apenas números.")
             return
 
+        # Busca questões
+        from database import buscar_questoes_por_ids
         questoes_base = buscar_questoes_por_ids(lista_ids)
         if not questoes_base:
             QMessageBox.critical(self, "Erro", "Nenhuma das questões com os IDs fornecidos foi encontrada no banco de dados.")
             return
 
+        # Inicia interface de log
         self.log_dialog = LogDialog(self)
         self.log_dialog.show()
         self.btn_gerar.setEnabled(False)
-        self.log_dialog.append_log(f"{len(questoes_base)} questões encontradas.")
-        self.log_dialog.append_log("Gerando variações... Este processo pode levar um momento.")
+        
+        self.log_dialog.append_log(f"🔍 {len(questoes_base)} questões encontradas.")
+        self.log_dialog.append_log("🔄 Gerando variações... Este processo pode levar um momento.")
         QApplication.processEvents()
 
-        # --- ETAPA 2: Prepara TODOS os dados para a Geração (LÓGICA CORRIGIDA) ---
+        # --- ETAPA 2: Prepara os dados para a Thread ---
         config = carregar_configuracoes()
         num_versoes = self.versoes_spinbox.value()
         
-        # 1. Define o número total de questões
+        # ⭐⭐ USA O NÚMERO INICIAL DE QUESTÕES (será atualizado depois da geração)
         num_total_questoes = len(questoes_base)
 
-        # 2. Lê os valores da interface e calcula os dados da prova
         valor_total = self.valor_total_spinbox.value()
         valor_por_questao = 0.0
         valor_por_questao_display = ""
@@ -289,8 +287,7 @@ class GeradorPorIdScreen(QWidget):
             if num_total_questoes > 0:
                 valor_por_questao = valor_total / num_total_questoes
                 valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
-        
-        # 3. Cria o dicionário de opções para o MOTOR GERADOR com os dados corretos
+
         opcoes_geracao = {
             "nome_prova": nome_prova,
             "gabarito": {
@@ -305,7 +302,6 @@ class GeradorPorIdScreen(QWidget):
             }
         }
         
-        # 4. Cria o dicionário de dados para o GERADOR DE PDF com os dados corretos
         self.temp_dados_pdf = {
             "nomeDisciplina": self.disciplina_combo.currentText() if self.disciplina_combo.currentIndex() > 0 else "Seleção por ID",
             "tipoExame": "AVALIAÇÃO",
@@ -315,21 +311,23 @@ class GeradorPorIdScreen(QWidget):
             "nomeCursoCompleto": config.get("nome_curso", ""),
             "nomeEscola": config.get("nome_escola", ""),
             "emailContato": config.get("email_contato", ""),
-            "numeroQuestoes": num_total_questoes,
+            "numeroQuestoes": num_total_questoes,  # Será atualizado depois
             "valorPorQuestao": valor_por_questao_display,
             "valorTotalProva": f"{valor_total:.2f}".replace('.', ',')
         }
         self.temp_nome_arquivo_base = self.nome_input.text()
 
         # --- ETAPA 3: Cria e Inicia a Thread ---
-        self.thread = QThread()
-        self.worker = GeradorWorker(questoes_base, num_versoes, opcoes_geracao)
-        self.worker.moveToThread(self.thread)
+        from .worker_gerador import GeradorWorker
         
+        self.thread = QThread()
+        self.worker = GeradorPorIdWorker(lista_ids, num_versoes, opcoes_geracao)
+        self.worker.moveToThread(self.thread)
+
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self._handle_geracao_concluida)
         self.worker.error.connect(self._handle_geracao_erro)
-        
+
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
@@ -338,13 +336,36 @@ class GeradorPorIdScreen(QWidget):
 
     def _handle_geracao_concluida(self, versoes_geradas):
         """
-        Executa quando a geração em segundo plano termina com sucesso.
+        Executa quando a geração termina com sucesso.
+        Agora também atualiza o número real de questões na capa.
         """
         if not versoes_geradas:
             self._handle_geracao_erro("O motor gerador não retornou nenhuma versão.")
             return
 
         self.log_dialog.append_log("Variações geradas. Solicitando pasta de destino...")
+        
+        # ⭐⭐ ATUALIZA O NÚMERO REAL DE QUESTÕES PARA A CAPA
+        if versoes_geradas and len(versoes_geradas) > 0:
+            primeira_versao = versoes_geradas[0]
+            # Verifica se é a estrutura correta com dicionário
+            if isinstance(primeira_versao, dict):
+                num_questoes_reais = len(primeira_versao.get('questoes', []))
+            else:
+                # Fallback: se for lista direta, usa o length
+                num_questoes_reais = len(primeira_versao) if hasattr(primeira_versao, '__len__') else 0
+            
+            # Atualiza os dados do PDF com o número REAL
+            self.temp_dados_pdf["numeroQuestoes"] = num_questoes_reais
+            
+            # Recalcula o valor por questão se necessário
+            if self.check_distribuir_valor.isChecked() and num_questoes_reais > 0:
+                valor_total = self.valor_total_spinbox.value()
+                valor_por_questao = valor_total / num_questoes_reais
+                valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
+                self.temp_dados_pdf["valorPorQuestao"] = valor_por_questao_display
+                
+            self.log_dialog.append_log(f"✅ Número real de questões na prova: {num_questoes_reais}")
         
         pasta_destino = QFileDialog.getExistingDirectory(self, "Selecione a pasta para salvar as provas")
         if not pasta_destino:

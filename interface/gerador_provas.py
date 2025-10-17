@@ -338,15 +338,47 @@ class GeradorProvasScreen(QWidget):
         num_versoes = self.versoes_spinbox.value()
         questoes_base, avisos = buscar_questoes_para_prova(criterios_granulares, num_versoes)
 
-        if not questoes_base:
-            QMessageBox.critical(self, "Erro", "Nenhuma questão foi encontrada com os critérios selecionados.")
-            return
+        # informa o usuário sobre a diferença entre solicitado e encontrado
+        total_encontrado = len(questoes_base)
+        # tenta extrair o total_solicitado do último aviso de resumo (compatível com a mudança em database.py)
+        total_solicitado = None
+        if avisos:
+            for a in avisos[::-1]:
+                if isinstance(a, str) and a.startswith("RESUMO:"):
+                    try:
+                        # formato: "RESUMO: solicitado=X, encontrados=Y"
+                        parts = a.split("solicitado=")[1].split(",")[0].strip()
+                        total_solicitado = int(parts)
+                    except Exception:
+                        total_solicitado = None
+                    break
+
+        if total_solicitado is None:
+            # fallback: calcule a partir dos critérios coletados se não estiver no aviso
+            total_solicitado = sum(
+                quantidade for chave, formatos in criterios_granulares.items()
+                for formato, difs in formatos.items()
+                for dif, quantidade in difs.items()
+            )
+
+        if total_encontrado < total_solicitado:
+            resp = QMessageBox.question(self, "Atenção - quantidade de questões",
+                f"Foram encontradas {total_encontrado} questões de {total_solicitado} solicitadas.\n\n"
+                "Possível motivo: este(s) tema(s) possuem grupos e o gerador está selecionando no máximo uma questão por grupo, "
+                "portanto várias questões solicitadas podem ter sido excluídas por pertencerem ao mesmo grupo.\n\n"
+                "A capa e o PDF usarão o número real encontrado. Deseja prosseguir mesmo assim?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if resp != QMessageBox.Yes:
+                return  # usuário cancelou para ajustar critérios
 
         # Prepara o log e desabilita o botão para evitar cliques duplos
         self.log_dialog = LogDialog(self)
         self.log_dialog.show()
         self.btn_gerar.setEnabled(False)
         self.log_dialog.append_log("Buscando questões no banco de dados...")
+        # Se houve diferença, acrescenta explicação curta no log para referência
+        if total_encontrado < total_solicitado:
+            self.log_dialog.append_log("Nota: Diferença entre solicitado e gerado pode ocorrer por limitação de 1 questão por grupo (verificar 'grupo' nas questões).")
         if avisos:
             self.log_dialog.append_log("\n--- AVISOS ---")
             for aviso in avisos:
@@ -362,8 +394,10 @@ class GeradorProvasScreen(QWidget):
         valor_total = self.valor_total_spinbox.value()
         valor_por_questao = 0.0
         valor_por_questao_display = "Vide a Questão"
+        # Use o total efetivo de questões encontradas para distribuir valores e para a capa
+        num_questoes_reais = len(questoes_base)
         if self.check_distribuir_valor.isChecked():
-            valor_por_questao = valor_total / num_total_questoes if num_total_questoes > 0 else 0
+            valor_por_questao = valor_total / num_questoes_reais if num_questoes_reais > 0 else 0
             valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
 
         opcoes_geracao = {
@@ -390,7 +424,8 @@ class GeradorProvasScreen(QWidget):
             "nomeCursoCompleto": config.get("nome_curso", ""),
             "nomeEscola": config.get("nome_escola", ""),
             "emailContato": config.get("email_contato", ""),
-            "numeroQuestoes": num_total_questoes, 
+            # usa o número real de questões retornadas pelo DB/motor
+            "numeroQuestoes": num_questoes_reais,            # <-- apenas o total efetivo será exibido na capa
             "valorPorQuestao": valor_por_questao_display, 
             "valorTotalProva": f"{valor_total:.2f}".replace('.', ',') 
         }
@@ -421,6 +456,24 @@ class GeradorProvasScreen(QWidget):
             return
 
         self.log_dialog.append_log("Variações geradas. Solicitando pasta de destino...")
+
+        # ⭐⭐ CORREÇÃO: Pegue o número REAL de questões da PRIMEIRA versão gerada
+        # Isso reflete exatamente o que foi gerado após todas as restrições de grupos
+        if versoes_geradas and len(versoes_geradas) > 0:
+            primeira_versao = versoes_geradas[0]
+            num_questoes_reais = len(primeira_versao.get('questoes', []))
+            
+            # ⭐⭐ ATUALIZE os dados do PDF com o número REAL
+            self.temp_dados_pdf["numeroQuestoes"] = num_questoes_reais
+            
+            # ⭐⭐ RECALCULE o valor por questão se necessário
+            if self.check_distribuir_valor.isChecked():
+                valor_total = self.valor_total_spinbox.value()
+                valor_por_questao = valor_total / num_questoes_reais if num_questoes_reais > 0 else 0
+                valor_por_questao_display = f"{valor_por_questao:.2f}".replace('.', ',')
+                self.temp_dados_pdf["valorPorQuestao"] = valor_por_questao_display
+                
+            self.log_dialog.append_log(f"✅ Número real de questões na prova: {num_questoes_reais}")
 
         pasta_destino = QFileDialog.getExistingDirectory(self, "Selecione a pasta para salvar as provas")
         if not pasta_destino:

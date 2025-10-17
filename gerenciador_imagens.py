@@ -3,6 +3,7 @@
 import os
 import shutil
 import time
+import uuid
 from PyQt5.QtWidgets import QFileDialog, QApplication
 
 # Define o nome da pasta de imagens
@@ -13,11 +14,19 @@ def inicializar_pasta_imagens():
     if not os.path.exists(PASTA_IMAGENS):
         os.makedirs(PASTA_IMAGENS)
 
-def _gerar_novo_nome(caminho_original):
+'''def _gerar_novo_nome(caminho_original):
     """Gera um novo nome de arquivo único baseado no timestamp."""
     _, extensao = os.path.splitext(caminho_original)
     timestamp = int(time.time() * 100)
     novo_nome = f"{timestamp}{extensao}"
+    return os.path.join(PASTA_IMAGENS, novo_nome)'''
+
+def _gerar_novo_nome(caminho_original):
+    """Gera um novo nome de arquivo único usando UUID."""
+    _, extensao = os.path.splitext(caminho_original)
+    # Gera um ID universalmente único e pega os primeiros 13 caracteres + extensão
+    # Ex: 550e8400-e29b-41d4.png (mais robusto que timestamp)
+    novo_nome = f"{uuid.uuid4()}{extensao}"
     return os.path.join(PASTA_IMAGENS, novo_nome)
 
 def copiar_arquivo_imagem_para_pasta_local(caminho_origem):
@@ -56,7 +65,7 @@ def selecionar_e_copiar_imagem():
         return copiar_arquivo_imagem_para_pasta_local(caminho_origem)
     return None
 
-def salvar_pixmap(pixmap):
+'''def salvar_pixmap(pixmap):
     """
     Salva um QPixmap da área de transferência na pasta local 'img' e retorna o caminho.
     """
@@ -66,6 +75,17 @@ def salvar_pixmap(pixmap):
     
     if pixmap.save(caminho_temp, "PNG"):
         return caminho_temp.replace('\\', '/')
+    return None'''
+
+def salvar_pixmap(pixmap):
+    """Salva um QPixmap usando UUID."""
+    inicializar_pasta_imagens()
+    # Gera um nome único usando UUID para PNG
+    novo_nome = f"{uuid.uuid4()}.png"
+    caminho_salvar = os.path.join(PASTA_IMAGENS, novo_nome)
+    
+    if pixmap.save(caminho_salvar, "PNG"):
+        return caminho_salvar.replace('\\', '/')
     return None
 
 def remover_imagem(caminho_relativo):

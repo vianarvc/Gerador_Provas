@@ -32,13 +32,27 @@ def copiar_imagens_para_destino(pasta_destino, log_dialog=None):
             log_message(f"⚠️  Imagem não encontrada: {origem}")
 
 
-def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerais_pdf, log_dialog=None):
-    
+def criar_pdf_provas(nome_base, versoes_geradas, pasta_destino, dados_pdf, log_dialog=None):
+    """
+    Gera os PDFs das provas e gabaritos.
+    Usa dados_pdf["numeroQuestoes"] como número exibido na capa (total efetivo gerado).
+    """
     def log_message(message):
         if log_dialog:
             log_dialog.append_log(message)
         else:
             print(message)
+
+    # DEBUG: inspeção inicial dos dados recebidos
+    log_message("DEBUG criar_pdf_provas: dados_pdf keys = " + ", ".join(map(str, dados_pdf.keys() if isinstance(dados_pdf, dict) else [])))
+    log_message(f"DEBUG criar_pdf_provas: dados_pdf['numeroQuestoes'] = {dados_pdf.get('numeroQuestoes') if isinstance(dados_pdf, dict) else 'N/A'}")
+    log_message(f"DEBUG criar_pdf_provas: versoes_geradas type = {type(versoes_geradas)}, len = {len(versoes_geradas) if hasattr(versoes_geradas, '__len__') else 'N/A'}")
+    if versoes_geradas:
+        primeira = versoes_geradas[0]
+        try:
+            log_message("DEBUG criar_pdf_provas: primeiras keys da versao = " + ", ".join(map(str, primeira.keys())) if isinstance(primeira, dict) else f"primeira repr: {repr(primeira)[:200]}")
+        except Exception:
+            pass
 
     # ⭐ ADICIONE ESTA LINHA:
     log_message("📁 Copiando imagens para a pasta de destino...")
@@ -60,15 +74,13 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
     try:
         template_prova = template_env.get_template('modelo_prova.tex')
         template_gabarito = template_env.get_template('modelo_gabarito.tex')
-        log_message(f"📄 Templates carregados de: {TEMPLATES_DIR}")  # ← ADICIONE ESTA LINHA
+        log_message(f"📄 Templates carregados de: {TEMPLATES_DIR}")
     except Exception as e:
         raise FileNotFoundError(f"Não foi possível encontrar os templates em {TEMPLATES_DIR}. Erro: {e}")
 
     todos_gabaritos = []
 
     log_message(f"Iniciando compilação de {len(versoes_geradas)} versão(ões)...")
-    
-    # --- INÍCIO DA CORREÇÃO PRINCIPAL ---
     
     # O loop agora itera sobre a nova estrutura de dados (lista de dicionários)
     for versao_data in versoes_geradas:
@@ -80,7 +92,7 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
         log_message(f"\nGerando arquivos para o Caderno {letra_versao}...")
         
         # 2. Usa a nomenclatura que você pediu
-        nome_base_arquivo = f"{nome_avaliacao.replace(' ', '_')}_caderno_{letra_versao}"
+        nome_base_arquivo = f"{nome_base.replace(' ', '_')}_caderno_{letra_versao}"
         caminho_tex = os.path.join(pasta_destino, f"{nome_base_arquivo}.tex")
         
         # 3. A lógica do gabarito agora itera sobre a lista de questões correta
@@ -94,13 +106,10 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
         todos_gabaritos.append({ "versao": f"Caderno {letra_versao}", "itens": itens_gabarito_versao })
         
         # 4. Prepara os dados para o template da prova
-        dados_template = dados_gerais_pdf.copy()
+        dados_template = dados_pdf.copy()
         dados_template['questoes'] = questoes_da_versao
         
-        # <<< CORREÇÃO CRUCIAL: Adiciona a letra da versão para o cabeçalho >>>
         dados_template['versao'] = letra_versao
-
-        # --- FIM DA CORREÇÃO PRINCIPAL ---
 
         with open(caminho_tex, 'w', encoding='utf-8') as f:
             f.write(template_prova.render(dados_template))
@@ -126,7 +135,7 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
 
     if todos_gabaritos:
         log_message("\nGerando PDF do Gabarito...")
-        caminho_tex_gabarito = os.path.join(pasta_destino, f"{nome_avaliacao.replace(' ', '_')}_GABARITO.tex")
+        caminho_tex_gabarito = os.path.join(pasta_destino, f"{nome_base.replace(' ', '_')}_GABARITO.tex")
         with open(caminho_tex_gabarito, 'w', encoding='utf-8') as f:
             f.write(template_gabarito.render({"versoes": todos_gabaritos}))
         comando_gabarito = ['xelatex', '-interaction=nonstopmode', '-output-directory', pasta_destino, caminho_tex_gabarito]
@@ -146,14 +155,14 @@ def criar_pdf_provas(nome_avaliacao, versoes_geradas, pasta_destino, dados_gerai
         # --- CORREÇÃO DA LIMPEZA: Usa a mesma lógica de nomenclatura ---
         for versao_data in versoes_geradas:
             letra_versao = versao_data.get('letra', 'N/A')
-            nome_base_arquivo = f"{nome_avaliacao.replace(' ', '_')}_caderno_{letra_versao}"
+            nome_base_arquivo = f"{nome_base.replace(' ', '_')}_caderno_{letra_versao}"
             for ext in extensoes_para_limpar:
                 arquivo_para_deletar = os.path.join(pasta_destino, nome_base_arquivo + ext)
                 if os.path.exists(arquivo_para_deletar):
                     try: os.remove(arquivo_para_deletar)
                     except OSError: pass
         
-        nome_gabarito = f"{nome_avaliacao.replace(' ', '_')}_GABARITO"
+        nome_gabarito = f"{nome_base.replace(' ', '_')}_GABARITO"
         for ext in extensoes_para_limpar:
             arquivo_gabarito_para_deletar = os.path.join(pasta_destino, nome_gabarito + ext)
             if os.path.exists(arquivo_gabarito_para_deletar):
